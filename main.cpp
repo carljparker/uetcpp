@@ -178,7 +178,11 @@ double nmin, vector<int> coltypes) {
         Node currentNode = {right_indices, right_instances, right_data};
         nodes.push(currentNode);
     }
-
+    while (!nodes.empty()) {
+        Node currentNode = nodes.front();
+        cout << "1" << "\n";
+        nodes.pop();
+    }
     print(matrix.at(1));
     return matrix;
 }
