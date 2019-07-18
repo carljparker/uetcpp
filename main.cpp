@@ -6,6 +6,7 @@
 #include <vector>
 #include <ctime>
 #include <string>
+#include <queue>
 using namespace std;
 
 double mean(const std::vector<double> &v)
@@ -122,7 +123,7 @@ double nmin, vector<int> coltypes) {
     cout << nrows << "\n";
 
     vector<vector<double>> matrix(nrows, vector<double>(ncols, 0)); 
-    vector<Node> nodes;
+    queue<Node> nodes;
 
     vector<int> instancesList;
     for (int i =0; i < nrows; i++) {
@@ -163,7 +164,19 @@ double nmin, vector<int> coltypes) {
     }
     else {
         Node currentNode = {left_indices, left_instances, left_data};
-        nodes.push_back(currentNode);
+        nodes.push(currentNode);
+    }
+
+    if(right_indices.size() < nmin) {
+        for (int instance1:right_instances) {
+            for (int instance2:right_instances) {
+                matrix.at(instance1).at(instance2) += 1;
+            }
+        }
+    }
+    else {
+        Node currentNode = {right_indices, right_instances, right_data};
+        nodes.push(currentNode);
     }
 
     print(matrix.at(1));
