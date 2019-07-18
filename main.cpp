@@ -56,7 +56,7 @@ double random_split(vector<double> values, int type)
     return split;
 }
 
-void print(std::vector<int> const &input)
+void print(std::vector<double> const &input)
 {
 	for (int i = 0; i < input.size(); i++) {
 		std::cout << input.at(i) << ' ';
@@ -106,13 +106,24 @@ void performSplit(vector<vector<double>> dataset, vector<int>& attributesIndices
     }
 }
 
+struct Node {
+    vector<int> indices;
+    vector<int> instances;
+    vector<vector<double>> data;
+};
 
-vector<double> build_randomized_tree_and_get_sim(vector<vector<double>> data, 
+vector<vector<double>> build_randomized_tree_and_get_sim(vector<vector<double>> data, 
 double nmin, vector<int> coltypes) {
+
+
     srand(time(NULL));
     int nrows = data.size();
     int ncols = data.front().size();
     cout << nrows << "\n";
+
+    vector<vector<double>> matrix(nrows, vector<double>(ncols, 0)); 
+    vector<Node> nodes;
+
     vector<int> instancesList;
     for (int i =0; i < nrows; i++) {
         instancesList.push_back(i);
@@ -127,19 +138,35 @@ double nmin, vector<int> coltypes) {
     vector<int> left_indices, right_indices;
     performSplit(data, attributes_indices, attributes, left_indices, right_indices);
     vector<int> left_instances, right_instances;
-    vector<double> left_data, right_data;
+    vector<vector<double>> left_data, right_data;
     for (int i=0; i < left_indices.size(); i++) {
         int index = left_indices.at(i);
         left_instances.push_back(instancesList.at(index));
+        for (int j=0; j < left_instances.size(); j++) {
+            left_data.push_back(data.at(j));
+        }
     }
     for (int i=0; i < right_indices.size(); i++) {
         int index = right_indices.at(i);
         right_instances.push_back(instancesList.at(index));
-    }    
-    print(right_instances);
-    cout < " - " < "\n";
-    print(left_instances);
-    vector<double> matrix; 
+        for (int j=0; j < right_instances.size(); j++) {
+            right_data.push_back(data.at(j));
+        }
+    }
+
+    if (left_indices.size() < nmin) {
+        for (int instance1:left_instances) {
+            for (int instance2:left_instances) {
+                matrix.at(instance1).at(instance2) += 1;
+            } 
+        }
+    }
+    else {
+        Node currentNode = {left_indices, left_instances, left_data};
+        nodes.push_back(currentNode);
+    }
+
+    print(matrix.at(1));
     return matrix;
 }
 
@@ -152,6 +179,6 @@ int main() {
 
     int nmin = 3;
     vector<int> coltypes{0,0,0,0};
-    vector<double> matrix = build_randomized_tree_and_get_sim(data, nmin, coltypes);
+    vector<vector<double>> matrix = build_randomized_tree_and_get_sim(data, nmin, coltypes);
     return 1;
 }
