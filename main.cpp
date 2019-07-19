@@ -64,21 +64,33 @@ void print(std::vector<double> const &input)
 	}
 }
 
-void getColumn(vector<vector<double>> &v, int attribute, vector<double>&col) {
+void print(std::vector<int> const &input)
+{
+	for (int i = 0; i < input.size(); i++) {
+		std::cout << input.at(i) << ' ';
+	}
+}
+
+vector<double> getColumn(vector<vector<double>> &v, int attribute) {
+    vector<double> col;
     for(auto& row:v) {
         col.push_back(row.at(attribute));
         }
+    return(col);
     }
 
-void getRows(vector<vector<double>>&v, vector<int> rows, vector<vector<double>>&out) {
+vector<vector<double>> getRows(vector<vector<double>>&v, vector<int> rows) {
+    vector<vector<double>>out;
     for(vector<double> row:v) {
             out.push_back(row);
         }
+    return(out);
     }
 
 
 
-void performSplit(vector<vector<double>> dataset, vector<int>& attributesIndices, vector<int> attributes, vector<int> &left, vector<int> &right, vector<int> nodeIndices={}) {
+void performSplit(vector<vector<double>> dataset, vector<int>& attributesIndices, 
+vector<int> attributes, vector<int> &left, vector<int> &right, vector<int> nodeIndices={}) {
     int randIndex = rand() % attributesIndices.size();
     int attributeIndex = attributesIndices.at(randIndex);
     *attributesIndices.erase(attributesIndices.begin()+randIndex); 
@@ -86,12 +98,12 @@ void performSplit(vector<vector<double>> dataset, vector<int>& attributesIndices
     vector<double> data;
     vector<vector<double>> localDataset;
     if (nodeIndices.size() == 0) {
-        getColumn(dataset, attribute, data);
+        data = getColumn(dataset, attribute);
     }
     else {
-        // getRows(dataset, nodeIndices, localDataset);
-        // getColumn(localDataset, attribute, data);
-        getColumn(dataset, attribute, data);
+        vector<vector<double>> rows = getRows(dataset, nodeIndices);
+        data = getColumn(rows, attribute);
+        // getColumn(dataset, attribute, data);
 
 
     }
@@ -138,21 +150,24 @@ double nmin, vector<int> coltypes) {
     vector<double> col; // Each column contains rowsize number of elements, i.e, the number of instances 
     vector<int> left_indices, right_indices;
     performSplit(data, attributes_indices, attributes, left_indices, right_indices);
+
     vector<int> left_instances, right_instances;
     vector<vector<double>> left_data, right_data;
     for (int i=0; i < left_indices.size(); i++) {
         int index = left_indices.at(i);
         left_instances.push_back(instancesList.at(index));
-        for (int j=0; j < left_instances.size(); j++) {
-            left_data.push_back(data.at(j));
-        }
+
     }
+    for (int j : left_instances) {
+        left_data.push_back(data.at(j));
+    }   
     for (int i=0; i < right_indices.size(); i++) {
         int index = right_indices.at(i);
         right_instances.push_back(instancesList.at(index));
-        for (int j=0; j < right_instances.size(); j++) {
-            right_data.push_back(data.at(j));
-        }
+
+    }
+    for (int j:right_instances) {
+        right_data.push_back(data.at(j));
     }
 
     if (left_indices.size() < nmin) {
@@ -178,24 +193,95 @@ double nmin, vector<int> coltypes) {
         Node currentNode = {right_indices, right_instances, right_data};
         nodes.push(currentNode);
     }
+
+    // Root node successfully has two children. Now, we iterate over these children.
+
     while (!nodes.empty()) {
+        if (attributes_indices.size() < 1) {
+            while (!nodes.empty()) {
+                vector<int> instances = nodes.front().instances;
+                nodes.pop();
+                for (int instance1:instances) {
+                    for (int instance2:instances) {
+                        matrix.at(instance1).at(instance2) += 1;
+                    }
+                }
+            break;
+            }
+        }
+
         Node currentNode = nodes.front();
         cout << "1" << "\n";
         nodes.pop();
+
+        vector<double> col;
+        data = currentNode.data;
+        vector<int> nodeIndices = currentNode.indices;
+        vector<int> left_indices, right_indices;
+        if (data.size() > 1) {
+            performSplit(data, attributes_indices, attributes, left_indices, right_indices, nodeIndices);
+            vector<int> left_instances, right_instances;
+            vector<vector<double>> left_data, right_data;
+
+            for (int i=0; i < left_indices.size(); i++) {
+                int index = left_indices.at(i);
+                left_instances.push_back(instancesList.at(index));
+                for (int j=0; j < left_instances.size(); j++) {
+                    left_data.push_back(data.at(j));
+                }
+            }
+            for (int i=0; i < right_indices.size(); i++) {
+                int index = right_indices.at(i);
+                right_instances.push_back(instancesList.at(index));
+                for (int j=0; j < right_instances.size(); j++) {
+                    right_data.push_back(data.at(j));
+                }
+            }
+
+            if (left_indices.size() < nmin) {
+                for (int instance1:left_instances) {
+                    for (int instance2:left_instances) {
+                        matrix.at(instance1).at(instance2) += 1;
+                    } 
+                }
+            }
+            else {
+                Node currentNode = {left_indices, left_instances, left_data};
+                nodes.push(currentNode);
+            }
+
+            if(right_indices.size() < nmin) {
+                for (int instance1:right_instances) {
+                    for (int instance2:right_instances) {
+                        matrix.at(instance1).at(instance2) += 1;
+                    }
+                }
+            }
+            else {
+                Node currentNode = {right_indices, right_instances, right_data};
+                nodes.push(currentNode);
+            }
+        }
+        else {
+            cout << "Else" << "\n";
+        }
+
+        
     }
     print(matrix.at(1));
     return matrix;
 }
 
 int main() {
-    vector<double> row1 = {1.3, 0.1, 2.3, 7.2};
-    vector<double> row2 = {8.3, 4.1, 1.3, 3.2};
-    vector<double> row3 = {1.0, 2.0, 3.0, 4.0};
-    vector<double> row4 = {0.1, 0.2, 0.3, 0.4};
+    vector<double> row1 = {1.3, 0.1, 2.3, 7.2, 8.4};
+    vector<double> row2 = {8.3, 4.1, 1.3, 3.2, 9.5};
+    vector<double> row3 = {1.0, 2.0, 3.0, 4.0, 5.0};
+    vector<double> row4 = {0.1, 0.2, 0.3, 0.4, 0.5};
     vector<vector<double>> data  = {row1, row2, row3, row4}; 
 
     int nmin = 3;
-    vector<int> coltypes{0,0,0,0};
+    vector<int> coltypes{0,0,0,0,0};
     vector<vector<double>> matrix = build_randomized_tree_and_get_sim(data, nmin, coltypes);
+
     return 1;
 }
