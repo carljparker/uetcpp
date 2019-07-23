@@ -7,7 +7,15 @@
 #include <ctime>
 #include <string>
 #include <queue>
+#include <fstream>
+#include <sstream>
+#include <iterator>
+#include <nlohmann/json.hpp>
+#include <cstdio>
+#include <iomanip>
+using json = nlohmann::json;
 using namespace std;
+using std::vector;
 
 double mean(const std::vector<double> &v)
 {
@@ -91,6 +99,7 @@ vector<vector<double>> getRows(vector<vector<double>>&v, vector<int> rows) {
 
 void performSplit(vector<vector<double>> dataset, vector<int>& attributesIndices, 
 vector<int> attributes, vector<int> &left, vector<int> &right, vector<int> nodeIndices={}) {
+    // cout << attributesIndices.size() << endl;
     int randIndex = rand() % attributesIndices.size();
     int attributeIndex = attributesIndices.at(randIndex);
     *attributesIndices.erase(attributesIndices.begin()+randIndex); 
@@ -108,7 +117,6 @@ vector<int> attributes, vector<int> &left, vector<int> &right, vector<int> nodeI
 
     }
     double value = random_split(data, 0);
-
     for(int i = 0; i < data.size(); i++) {
         if(data.at(i) < value) {
             left.push_back(i);
@@ -125,6 +133,7 @@ struct Node {
     vector<vector<double>> data;
 };
 
+extern "C++"
 vector<vector<double>> build_randomized_tree_and_get_sim(vector<vector<double>> data, 
 double nmin, vector<int> coltypes) {
 
@@ -132,9 +141,9 @@ double nmin, vector<int> coltypes) {
     srand(time(NULL));
     int nrows = data.size();
     int ncols = data.front().size();
-    cout << nrows << "\n";
+    // cout << nrows << "\n";
 
-    vector<vector<double>> matrix(nrows, vector<double>(ncols, 0)); 
+    vector<vector<double>> matrix(nrows, vector<double>(nrows, 0)); 
     queue<Node> nodes;
 
     vector<int> instancesList;
@@ -206,18 +215,20 @@ double nmin, vector<int> coltypes) {
                         matrix.at(instance1).at(instance2) += 1;
                     }
                 }
-            break;
+
             }
+        break;
+
         }
 
         Node currentNode = nodes.front();
-        cout << "1" << "\n";
         nodes.pop();
 
         vector<double> col;
         data = currentNode.data;
         vector<int> nodeIndices = currentNode.indices;
         vector<int> left_indices, right_indices;
+
         if (data.size() > 1) {
             performSplit(data, attributes_indices, attributes, left_indices, right_indices, nodeIndices);
             vector<int> left_instances, right_instances;
@@ -226,17 +237,21 @@ double nmin, vector<int> coltypes) {
             for (int i=0; i < left_indices.size(); i++) {
                 int index = left_indices.at(i);
                 left_instances.push_back(instancesList.at(index));
-                for (int j=0; j < left_instances.size(); j++) {
-                    left_data.push_back(data.at(j));
-                }
             }
+
+            for (int j : left_instances) {
+                left_data.push_back(data.at(j));
+            }  
+ 
             for (int i=0; i < right_indices.size(); i++) {
                 int index = right_indices.at(i);
                 right_instances.push_back(instancesList.at(index));
-                for (int j=0; j < right_instances.size(); j++) {
-                    right_data.push_back(data.at(j));
-                }
             }
+
+            for (int j:right_instances) {
+                right_data.push_back(data.at(j));
+            }
+
 
             if (left_indices.size() < nmin) {
                 for (int instance1:left_instances) {
@@ -244,11 +259,15 @@ double nmin, vector<int> coltypes) {
                         matrix.at(instance1).at(instance2) += 1;
                     } 
                 }
+
             }
+
             else {
                 Node currentNode = {left_indices, left_instances, left_data};
                 nodes.push(currentNode);
+
             }
+
 
             if(right_indices.size() < nmin) {
                 for (int instance1:right_instances) {
@@ -256,11 +275,15 @@ double nmin, vector<int> coltypes) {
                         matrix.at(instance1).at(instance2) += 1;
                     }
                 }
+
             }
+
             else {
                 Node currentNode = {right_indices, right_instances, right_data};
                 nodes.push(currentNode);
+
             }
+
         }
         else {
             cout << "Else" << "\n";
@@ -268,20 +291,41 @@ double nmin, vector<int> coltypes) {
 
         
     }
-    print(matrix.at(1));
     return matrix;
 }
-
 int main() {
-    vector<double> row1 = {1.3, 0.1, 2.3, 7.2, 8.4};
-    vector<double> row2 = {8.3, 4.1, 1.3, 3.2, 9.5};
-    vector<double> row3 = {1.0, 2.0, 3.0, 4.0, 5.0};
-    vector<double> row4 = {0.1, 0.2, 0.3, 0.4, 0.5};
-    vector<vector<double>> data  = {row1, row2, row3, row4}; 
-
+    // vector<double> row1 = {1.3, 0.1, 2.3, 7.2, 8.4};
+    // vector<double> row2 = {8.3, 4.1, 1.3, 3.2, 9.5};
+    // vector<double> row3 = {1.0, 2.0, 3.0, 4.0, 5.0};
+    // vector<double> row4 = {0.1, 0.2, 0.3, 0.4, 0.5};
+    // vector<vector<double>> data  = {row1, row2, row3, row4}; 
+    vector<vector<double>> data;
     int nmin = 3;
-    vector<int> coltypes{0,0,0,0,0};
+    // cout << data.size();
+    std::ifstream i("pima.json");
+    json j;
+    i >> j;
+    // int n_rows = j;
+    // int n_cols = j.at(0).size();
+    // cout << n_cols + " " + n_rows << "\n";
+    for (auto& element : j) {
+        vector<double> row;
+        for(auto& element2 : element) {
+            row.push_back(element2);
+            // std::cout << element2 << '\n';
+        }
+        data.push_back(row);
+    }
+    vector<int> coltypes;
+    for (int i=0; i < data.at(0).size(); i++) {
+        coltypes.push_back(1);
+    }
     vector<vector<double>> matrix = build_randomized_tree_and_get_sim(data, nmin, coltypes);
-
+    for (int i=0; i < matrix.size(); i++) {
+        for (int j=0; j < matrix.size(); j++) {
+            cout << matrix[i][j] << "\n";
+        }
+    }
     return 1;
 }
+
