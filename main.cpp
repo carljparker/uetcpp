@@ -13,7 +13,9 @@
 #include <nlohmann/json.hpp>
 #include <cstdio>
 #include <iomanip>
+#include <Dense>
 using json = nlohmann::json;
+using Eigen::MatrixXd;
 using namespace std;
 using std::vector;
 
@@ -157,7 +159,7 @@ struct Node {
 };
 
 extern "C++"
-vector<vector<double>> build_randomized_tree_and_get_sim(vector<vector<double>> data, 
+MatrixXd build_randomized_tree_and_get_sim(vector<vector<double>> data, 
 double nmin, vector<int> coltypes) {
 
 
@@ -166,7 +168,8 @@ double nmin, vector<int> coltypes) {
     int ncols = data.front().size();
     // cout << nrows << "\n";
 
-    vector<vector<double>> matrix(nrows, vector<double>(nrows, 0)); 
+    // vector<vector<double>> matrix(nrows, vector<double>(nrows, 0)); 
+    MatrixXd matrix(nrows, nrows);
     queue<Node> nodes;
 
     vector<int> instancesList;
@@ -205,9 +208,9 @@ double nmin, vector<int> coltypes) {
     if (left_indices.size() < nmin) {
         for (int instance1:left_instances) {
             for (int instance2:left_instances) {
-                matrix.at(instance1).at(instance2) += 1;
+                matrix(instance1, instance2) += 1;
                 if (instance1 != instance2) {
-                    matrix.at(instance2).at(instance1) += 1;
+                    matrix(instance2, instance1) += 1;
                 }
             } 
         }
@@ -222,9 +225,9 @@ double nmin, vector<int> coltypes) {
     if(right_indices.size() < nmin) {
         for (int instance1:right_instances) {
             for (int instance2:right_instances) {
-                matrix.at(instance1).at(instance2) += 1;
+                matrix(instance1, instance2) += 1;
                 if (instance1 != instance2) {
-                    matrix.at(instance2).at(instance1) += 1;
+                    matrix(instance2, instance1) += 1;
                 }            
             }
         }
@@ -251,9 +254,9 @@ double nmin, vector<int> coltypes) {
                 nodes.pop();
                 for (int instance1:instances) {
                     for (int instance2:instances) {
-                        matrix.at(instance1).at(instance2) += 1;
+                        matrix(instance1, instance2) += 1;
                         if (instance1 != instance2) {
-                            matrix.at(instance2).at(instance1) += 1;
+                            matrix(instance2, instance1) += 1;
                         }                       
                     }
                 }
@@ -295,9 +298,9 @@ double nmin, vector<int> coltypes) {
             if (left_indices.size() < nmin) {
                 for (int instance1:left_instances) {
                     for (int instance2:left_instances) {
-                        matrix.at(instance1).at(instance2) += 1;
+                        matrix(instance1, instance2) += 1;
                         if (instance1 != instance2) {
-                            matrix.at(instance2).at(instance1) += 1;
+                            matrix(instance2, instance1) += 1;
                         }                
                     }
                 }
@@ -313,9 +316,9 @@ double nmin, vector<int> coltypes) {
             if(right_indices.size() < nmin) {
                 for (int instance1:right_instances) {
                     for (int instance2:right_instances) {
-                        matrix.at(instance1).at(instance2) += 1;
+                        matrix(instance1, instance2) += 1;
                         if (instance1 != instance2) {
-                            matrix.at(instance2).at(instance1) += 1;
+                            matrix(instance2, instance1) += 1;
                         }
                     }
                 }
@@ -344,11 +347,12 @@ int main() {
     // vector<vector<double>> data  = {row1, row2, row3, row4}; 
     vector<vector<double>> data;
     int nmin = 3;
+    int nTrees = 2;
     // cout << data.size();
     std::ifstream i("pima.json");
     json j;
     i >> j;
-    // int n_rows = j;
+    int nrows = j.size();
     // int n_cols = j.at(0).size();
     // cout << n_cols + " " + n_rows << "\n";
     for (auto& element : j) {
@@ -363,17 +367,24 @@ int main() {
     for (int i=0; i < data.at(0).size(); i++) {
         coltypes.push_back(1);
     }
-    vector<vector<double>> matrix = build_randomized_tree_and_get_sim(data, nmin, coltypes);
-    int errors = 0;
-    for (int i=0; i < matrix.size(); i++) {
-        // for (int j=0; j < matrix.size(); j++) {
-            // cout << matrix[i][i] << endl;
-            if (matrix[i][i] == 0) {
-                errors++;
-            // }
-        }
+    // vector<vector<double>> matrix;
+    MatrixXd matrix(nrows, nrows);
+
+    for (int i = 0; i < nTrees; i++) {
+        matrix += build_randomized_tree_and_get_sim(data, nmin, coltypes);
     }
-cout << errors << "\n";
+    int errors = 0;
+   
+    std::cout << matrix << std::endl;
+//     for (int i=0; i < matrix.size(); i++) {
+//         // for (int j=0; j < matrix.size(); j++) {
+//             // cout << matrix[i][i] << endl;
+//             if (matrix[i][i] == 0) {
+//                 errors++;
+//             // }
+//         }
+//     }
+// cout << errors << "\n";
 
     return 1;
 }
