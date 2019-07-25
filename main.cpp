@@ -14,10 +14,17 @@
 #include <cstdio>
 #include <iomanip>
 #include <Dense>
+#include <chrono>
+#include <omp.h>
+
 using json = nlohmann::json;
 using Eigen::MatrixXd;
 using namespace std;
 using std::vector;
+using std::chrono::duration;
+using std::chrono::duration_cast;
+using std::chrono::high_resolution_clock;
+using std::milli;
 
 double mean(const std::vector<double> &v)
 {
@@ -347,7 +354,7 @@ int main() {
     // vector<vector<double>> data  = {row1, row2, row3, row4}; 
     vector<vector<double>> data;
     int nmin = 3;
-    int nTrees = 15;
+    int nTrees = 200;
     // cout << data.size();
     std::ifstream i("pima.json");
     json j;
@@ -369,30 +376,22 @@ int main() {
     }
     // vector<vector<double>> matrix;
     MatrixXd matrix(nrows, nrows);
-
+    const auto startTime = high_resolution_clock::now();
+    #pragma omp parallel for       
     for (int i = 0; i < nTrees; i++) {
         MatrixXd matrix2(nrows, nrows);
 
         matrix2 = build_randomized_tree_and_get_sim(data, nmin, coltypes);
         matrix += matrix2;
-        // cout << "Value" << endl;
-        // std::cout << matrix(1,1) << std::endl;
-        // std::cout << matrix(50,50) << std::endl;
 
     }
+    const auto endTime = high_resolution_clock::now();
+    printf("Time: %fms\n", duration_cast<duration<double, milli>>(endTime - startTime).count());
     matrix = matrix/nTrees;
     int errors = 0;
    
-    std::cout << matrix << std::endl;
-//     for (int i=0; i < matrix.size(); i++) {
-//         // for (int j=0; j < matrix.size(); j++) {
-//             // cout << matrix[i][i] << endl;
-//             if (matrix[i][i] == 0) {
-//                 errors++;
-//             // }
-//         }
-//     }
-// cout << errors << "\n";
+    // std::cout << matrix << std::endl;
+
 
     return 1;
 }
