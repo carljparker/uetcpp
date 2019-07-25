@@ -57,7 +57,7 @@ double random_split(vector<double> values, int type)
     double split;
     double min, max;
     auto result = std::minmax_element(std::begin(values), std::end(values));
-    // srand(time(NULL));
+    srand(time(NULL));
     std::random_device rd;
     std::default_random_engine generator(rd());
     std::uniform_real_distribution<double> distribution(*result.first, *result.second);
@@ -88,7 +88,7 @@ void print(std::vector<int> const &input)
 	}
 }
 
-vector<double> getColumn(vector<vector<double>> &v, int attribute) {
+vector<double> getColumn(const vector<vector<double>> &v, int attribute) {
     vector<double> col;
     for(auto& row:v) {
         col.push_back(row.at(attribute));
@@ -96,7 +96,7 @@ vector<double> getColumn(vector<vector<double>> &v, int attribute) {
     return(col);
     }
 
-vector<vector<double>> getRows(vector<vector<double>>&v, vector<int> rows) {
+vector<vector<double>> getRows(const vector<vector<double>> &v, vector<int> rows) {
     vector<vector<double>>out;
     for(int i:rows) {
             out.push_back(v.at(i));
@@ -106,8 +106,8 @@ vector<vector<double>> getRows(vector<vector<double>>&v, vector<int> rows) {
 
 
 
-void performSplit(vector<vector<double>> dataset, vector<int>& attributesIndices, 
-vector<int> attributes, vector<int> &left, vector<int> &right, vector<int> nodeIndices={}) {
+void performSplit(const vector<vector<double>>& dataset, vector<int>& attributesIndices, 
+vector<int> attributes, vector<int> &left, vector<int> &right, const vector<int> &nodeIndices={}) {
     // cout << attributesIndices.size() << endl;
     int randIndex = rand() % attributesIndices.size();
     // cout << "a" << endl;
@@ -353,20 +353,29 @@ int main() {
     // vector<double> row4 = {0.1, 0.2, 0.3, 0.4, 0.5};
     // vector<vector<double>> data  = {row1, row2, row3, row4}; 
     vector<vector<double>> data;
-    int nmin = 3;
-    int nTrees = 200;
+    int nTrees = 4000;
     // cout << data.size();
-    std::ifstream i("pima.json");
+    std::ifstream i("isolet.json");
     json j;
     i >> j;
+    vector<int> labels;
     int nrows = j.size();
-    // int n_cols = j.at(0).size();
+    int nmin = floor(nrows/3);
+
+    // cout << nrows << endl;
+    int ncols = j.at(0).size();
+
+
+    // cout << ncols << endl;
     // cout << n_cols + " " + n_rows << "\n";
     for (auto& element : j) {
         vector<double> row;
+        int counter = 0;
         for(auto& element2 : element) {
-            row.push_back(element2);
-            // std::cout << element2 << '\n';
+            if (counter < ncols-1) { // The last column is the label one
+                row.push_back(element2);
+            }
+            counter++;
         }
         data.push_back(row);
     }
@@ -374,6 +383,7 @@ int main() {
     for (int i=0; i < data.at(0).size(); i++) {
         coltypes.push_back(1);
     }
+    cout << coltypes.size() << endl;
     // vector<vector<double>> matrix;
     MatrixXd matrix(nrows, nrows);
     const auto startTime = high_resolution_clock::now();
@@ -388,7 +398,7 @@ int main() {
     const auto endTime = high_resolution_clock::now();
     printf("Time: %fms\n", duration_cast<duration<double, milli>>(endTime - startTime).count());
     matrix = matrix/nTrees;
-    int errors = 0;
+    // int errors = 0;
    
     // std::cout << matrix << std::endl;
 
