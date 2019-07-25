@@ -159,7 +159,7 @@ struct Node {
 };
 
 extern "C++"
-MatrixXd build_randomized_tree_and_get_sim(vector<vector<double>> data, 
+MatrixXd build_randomized_tree_and_get_sim(const vector<vector<double>>& data, 
 double nmin, vector<int> coltypes) {
 
 
@@ -208,10 +208,10 @@ double nmin, vector<int> coltypes) {
     if (left_indices.size() < nmin) {
         for (int instance1:left_instances) {
             for (int instance2:left_instances) {
-                matrix(instance1, instance2) += 1;
-                if (instance1 != instance2) {
-                    matrix(instance2, instance1) += 1;
-                }
+                matrix(instance1, instance2)+= 1.0;
+                // if (instance1 != instance2) {
+                //     matrix(instance2, instance1)+= 1.0;
+                // }
             } 
         }
     }
@@ -225,10 +225,10 @@ double nmin, vector<int> coltypes) {
     if(right_indices.size() < nmin) {
         for (int instance1:right_instances) {
             for (int instance2:right_instances) {
-                matrix(instance1, instance2) += 1;
-                if (instance1 != instance2) {
-                    matrix(instance2, instance1) += 1;
-                }            
+                matrix(instance1, instance2)+= 1.0;
+                // if (instance1 != instance2) {
+                //     matrix(instance2, instance1)+= 1.0;
+                // }            
             }
         }
     }
@@ -254,10 +254,10 @@ double nmin, vector<int> coltypes) {
                 nodes.pop();
                 for (int instance1:instances) {
                     for (int instance2:instances) {
-                        matrix(instance1, instance2) += 1;
-                        if (instance1 != instance2) {
-                            matrix(instance2, instance1) += 1;
-                        }                       
+                        matrix(instance1, instance2)+= 1.0;
+                        // if (instance1 != instance2) {
+                        //     matrix(instance2, instance1)+= 1.0;
+                        // }                       
                     }
                 }
 
@@ -298,10 +298,10 @@ double nmin, vector<int> coltypes) {
             if (left_indices.size() < nmin) {
                 for (int instance1:left_instances) {
                     for (int instance2:left_instances) {
-                        matrix(instance1, instance2) += 1;
-                        if (instance1 != instance2) {
-                            matrix(instance2, instance1) += 1;
-                        }                
+                        matrix(instance1, instance2)+= 1.0;
+                        // if (instance1 != instance2) {
+                        //     matrix(instance2, instance1)+= 1.0;
+                        // }                
                     }
                 }
             }
@@ -316,10 +316,10 @@ double nmin, vector<int> coltypes) {
             if(right_indices.size() < nmin) {
                 for (int instance1:right_instances) {
                     for (int instance2:right_instances) {
-                        matrix(instance1, instance2) += 1;
-                        if (instance1 != instance2) {
-                            matrix(instance2, instance1) += 1;
-                        }
+                        matrix(instance1, instance2)+= 1.0;
+                        // if (instance1 != instance2) {
+                        //     matrix(instance2, instance1)+= 1.0;
+                        // }
                     }
                 }
 
@@ -347,7 +347,7 @@ int main() {
     // vector<vector<double>> data  = {row1, row2, row3, row4}; 
     vector<vector<double>> data;
     int nmin = 3;
-    int nTrees = 2;
+    int nTrees = 15;
     // cout << data.size();
     std::ifstream i("pima.json");
     json j;
@@ -371,8 +371,16 @@ int main() {
     MatrixXd matrix(nrows, nrows);
 
     for (int i = 0; i < nTrees; i++) {
-        matrix += build_randomized_tree_and_get_sim(data, nmin, coltypes);
+        MatrixXd matrix2(nrows, nrows);
+
+        matrix2 = build_randomized_tree_and_get_sim(data, nmin, coltypes);
+        matrix += matrix2;
+        // cout << "Value" << endl;
+        // std::cout << matrix(1,1) << std::endl;
+        // std::cout << matrix(50,50) << std::endl;
+
     }
+    matrix = matrix/nTrees;
     int errors = 0;
    
     std::cout << matrix << std::endl;
