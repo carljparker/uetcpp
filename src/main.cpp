@@ -17,6 +17,7 @@
 #include <chrono>
 #include <omp.h>
 #include <fstream>
+#include <unordered_set>
 
 using json = nlohmann::json;
 using Eigen::MatrixXd;
@@ -56,14 +57,19 @@ double random_split(vector<double> values, int type)
 {
 
     double split;
-    double min, max;
     auto result = std::minmax_element(std::begin(values), std::end(values));
+    // double sum = std::accumulate(values.begin(), values.end(), 0.0);
+    // double mean = sum / values.size();
+
+    // double sq_sum = std::inner_product(values.begin(), values.end(), values.begin(), 0.0);
+    // double stdev = std::sqrt(sq_sum / values.size() - mean * mean);
     srand(time(NULL));
     std::random_device rd;
     std::default_random_engine generator(rd());
-
-    // double number = distribution(generator);
     if (type == 0) {
+        // cout << mean << " " << stdev << endl;
+        // std::normal_distribution<double> distribution(mean, stdev);
+
         std::uniform_real_distribution<double> distribution(*result.first, *result.second);
         split = distribution(generator);
     }
@@ -71,7 +77,7 @@ double random_split(vector<double> values, int type)
         std::uniform_int_distribution<int> dist(0, values.size() - 1);
         split = values[dist(generator)];
     }
-    return split;
+        return split;
 }
 
 void print(std::vector<double> const &input)
@@ -104,79 +110,107 @@ vector<vector<double>> getRows(const vector<vector<double>> &v, vector<int> rows
     return(out);
     }
 
+vector<double> remove(std::vector<double> v)
+{
+	std::vector<double>::iterator itr = v.begin();
+	std::unordered_set<int> s;
 
+	for (auto curr = v.begin(); curr != v.end(); ++curr) {
+		if (s.insert(*curr).second)
+			*itr++ = *curr;
+	}
 
-void performSplit(const vector<vector<double>>& dataset, vector<int>& attributesIndices, 
-vector<int> attributes, const vector<int>& coltypes, vector<int> &left, vector<int> &right, const vector<int> &nodeIndices={}) {
-    // cout << attributesIndices.size() << endl;
+	v.erase(itr, v.end());
+    return(v);
+}
+
+int performSplit(const vector<vector<double>>& dataset, vector<int>& attributesIndices, 
+vector<int> attributes, const vector<int>& coltypes, vector<int> &left, vector<int> &right) {
     int randIndex = rand() % attributesIndices.size();
-    // cout << "a" << endl;
     int attributeIndex = attributesIndices[randIndex];
-    // cout << "b" << endl;
     *attributesIndices.erase(attributesIndices.begin()+randIndex); 
     int attribute = attributes[attributeIndex];
     int type = coltypes[attribute];
-    // cout << "c" << endl;
     vector<double> data;
     vector<vector<double>> localDataset;
-    if (nodeIndices.size() == 0) {
-        // cout << "d1" << endl;
 
-        data = getColumn(dataset, attribute);
-        // cout << "d2" << endl;
+    data = getColumn(dataset, attribute);
+    
+    std::unordered_set<double> set;
+    
+    for (const double &i: data) {
+        set.insert(i);
     }
-    else {
-        // cout << "e1" << endl;
 
-        vector<vector<double>> rows = getRows(dataset, nodeIndices);
-        // cout << "e2" << endl;
-
-        data = getColumn(rows, attribute);
-        // getColumn(dataset, attribute, data);
-        // cout << "f" << endl;
-
-
+    if (set.size() == 1){
+        return 1;
     }
+
     double value = random_split(data, type);
-    // cout << "g" << endl;
 
     for(int i = 0; i < data.size(); i++) {
         if(data[i] < value) {
-            if (nodeIndices.size() == 0) {
-                left.push_back(i);
-            }
-            else {
-                left.push_back(nodeIndices[i]);
-            }
-
+            left.push_back(i);
         }
         else {
-            if (nodeIndices.size() == 0) {
-                right.push_back(i);
-            }
-            else {
-                right.push_back(nodeIndices[i]);
-            }
+            right.push_back(i);
         }
     }
+
+    return 0;
+}
+
+int performSplit(const vector<vector<double>>& dataset, vector<int>& attributesIndices, 
+const vector<int> attributes, const vector<int>& coltypes, vector<int> &left, vector<int> &right, const vector<int> &nodeIndices) {
+    int randIndex = rand() % attributesIndices.size();
+    int attributeIndex = attributesIndices[randIndex];
+    *attributesIndices.erase(attributesIndices.begin()+randIndex); 
+    int attribute = attributes[attributeIndex];
+    int type = coltypes[attribute];
+    vector<double> data;
+    vector<vector<double>> localDataset;
+
+    // print(nodeIndices);
+    vector<vector<double>> rows = getRows(dataset, nodeIndices);
+
+    data = getColumn(rows, attribute);
+
+    std::unordered_set<double> set;
+    for (const double &i: data) {
+        set.insert(i);
+    }
+
+    if (set.size() == 1){
+        return 1;
+    }
+    double value = random_split(data, type);
+
+    for(int i = 0; i < data.size(); i++) {
+        if(data[i] < value) {
+                left.push_back(nodeIndices[i]);
+        }
+        else {
+            right.push_back(nodeIndices[i]);
+        }
+ 
+    }
+    return 0;
 }
 
 struct Node {
     vector<int> indices;
-    vector<int> instances;
+    // vector<int> instances;
 };
 
 extern "C++"
 MatrixXd build_randomized_tree_and_get_sim(const vector<vector<double>>& data, 
 const double& nmin, const vector<int>& coltypes) {
-
+    vector<int> seenNodes;
 
     srand(time(NULL));
     int nrows = data.size();
     int ncols = data.front().size();
-    // cout << nrows << "\n";
 
-    // vector<vector<double>> matrix(nrows, vector<double>(nrows, 0)); 
     MatrixXd matrix = MatrixXd::Zero(nrows, nrows);
     queue<Node> nodes;
 
@@ -190,86 +224,79 @@ const double& nmin, const vector<int>& coltypes) {
         attributes.push_back(i);
     }
 
-    vector<double> col; // Each column contains rowsize number of elements, i.e, the number of instances 
+    // vector<double> col; // Each column contains rowsize number of elements, i.e, the number of instances 
     vector<int> left_indices, right_indices;
     performSplit(data, attributes_indices, attributes, coltypes, left_indices, right_indices);
 
     vector<int> left_instances, right_instances;
     vector<vector<double>> left_data, right_data;
-    for (int i=0; i < left_indices.size(); i++) {
-        int index = left_indices[i];
-        left_instances.push_back(instancesList[index]);
 
-    }
-    for (int j : left_instances) {
+    for (int j : left_indices) {
         left_data.push_back(data[j]);
     }   
-    for (int i=0; i < right_indices.size(); i++) {
-        int index = right_indices[i];
-        right_instances.push_back(instancesList[index]);
 
-    }
-    for (int j:right_instances) {
+    for (int j:right_indices) {
         right_data.push_back(data[j]);
     }
 
     if (left_indices.size() < nmin) {
-        for (int instance1:left_instances) {
-            for (int instance2:left_instances) {
+        for (int instance1:left_indices) {
+            seenNodes.push_back(instance1);
+            for (int instance2:left_indices) {
                 matrix(instance1, instance2)+= 1.0;
-                // if (instance1 != instance2) {
-                //     matrix(instance2, instance1)+= 1.0;
-                // }
             } 
         }
     }
 
 
     else {
-        Node currentNode = {left_indices, left_instances};
+        Node currentNode = {left_indices};
         nodes.push(currentNode);
     }
 
     if(right_indices.size() < nmin) {
-        for (int instance1:right_instances) {
-            for (int instance2:right_instances) {
-                matrix(instance1, instance2)+= 1.0;
-                // if (instance1 != instance2) {
-                //     matrix(instance2, instance1)+= 1.0;
-                // }            
+        for (int instance1:right_indices) {
+            seenNodes.push_back(instance1);
+            for (int instance2:right_indices) {
+                matrix(instance1, instance2)+= 1.0;   
             }
         }
     }
     else {
-        Node currentNode = {right_indices, right_instances};
+        Node currentNode = {right_indices};
         nodes.push(currentNode);
     }
 
-            for (int const instance1:left_instances) {
-                for (int const instance2: right_instances) {
-                    if (instance1 == instance2) {
-                        cout << "Même instance dans deux branches différentes ici !" << endl;
-                    }
-                }
-            }
+    if (left_indices.size()+right_indices.size() != 150) {
+        cout << "Error" << endl;
+    }
+
+    // for (int const instance1:left_instances) {
+    //     for (int const instance2: right_instances) {
+    //         if (instance1 == instance2) {
+    //             cout << "Même instance dans deux branches différentes ici !" << endl;
+    //         }
+    //     }
+    // }
+
+
 
     // Root node successfully has two children. Now, we iterate over these children.
-
+    int counter = 0;
     while (!nodes.empty()) {
+        // cout << "Loop number " << counter << endl;
         if (attributes_indices.size() < 1) {
             while (!nodes.empty()) {
-                vector<int> instances = nodes.front().instances;
+                vector<int> instances = nodes.front().indices;
                 nodes.pop();
                 for (int instance1:instances) {
+                    seenNodes.push_back(instance1);
                     for (int instance2:instances) {
-                        matrix(instance1, instance2)+= 1.0;
-                        // if (instance1 != instance2) {
-                        //     matrix(instance2, instance1)+= 1.0;
-                        // }                       
+                        matrix(instance1, instance2) += 1.0;              
                     }
                 }
-
             }
+
         break;
 
         }
@@ -277,64 +304,71 @@ const double& nmin, const vector<int>& coltypes) {
         Node currentNode = nodes.front();
         nodes.pop();
 
-        vector<double> col;
+        // vector<double> col;
         vector<int> nodeIndices = currentNode.indices;
+        if (nodeIndices.size() >= 150) {
+            cout << "Error with nodeIndices size" << endl;
+        }
         vector<int> left_indices, right_indices;
+        // print(left_indices);
+        if (nodeIndices.size() >= nmin) {
+            if (performSplit(data, attributes_indices, attributes, coltypes, left_indices, right_indices, nodeIndices) == 1) { // We have a column with only one unique value
+                for (int instance1:nodeIndices) {
+                    seenNodes.push_back(instance1);
+                    for (int instance2:nodeIndices) {
+                        matrix(instance1, instance2) += 1.0;              
+                    }
+                }
+                cout << "Lower bound number of values reached" << endl;
+                continue;                
+            }
+            // cout << "Nmin not reached" << endl;c
+            // print(left_indices);
 
-        if (data.size() > 1) {
-            performSplit(data, attributes_indices, attributes, coltypes, left_indices, right_indices, nodeIndices);
             vector<int> left_instances, right_instances;
             vector<vector<double>> left_data, right_data;
 
-            for (int i=0; i < left_indices.size(); i++) {
-                int index = left_indices[i];
-                left_instances.push_back(instancesList[index]);
-            }
-
-            for (int j : left_instances) {
+            for (int j : left_indices) {
                 left_data.push_back(data[j]);
             }  
  
-            for (int i=0; i < right_indices.size(); i++) {
-                int index = right_indices[i];
-                right_instances.push_back(instancesList[index]);
-            }
-
-            for (int j:right_instances) {
+            for (int j:right_indices) {
                 right_data.push_back(data[j]);
             }
+
+            if (left_instances.size()+right_instances.size()>=150) {
+                cout << "Error" << endl;
+            }
             if (left_indices.size() < nmin) {
-                for (int instance1:left_instances) {
-                    for (int instance2:left_instances) {
-                        matrix(instance1, instance2)+= 1.0;
-                        // if (instance1 != instance2) {
-                        //     matrix(instance2, instance1)+= 1.0;
-                        // }                
+                for (int instance1:left_indices) {
+                    seenNodes.push_back(instance1);
+
+                    for (int instance2:left_indices) {
+                        matrix(instance1, instance2)+= 1.0;     
                     }
                 }
             }
 
             else {
-                Node currentNode = {left_indices, left_instances};
+                Node currentNode = {left_indices};
                 nodes.push(currentNode);
 
             }
 
 
             if(right_indices.size() < nmin) {
-                for (int instance1:right_instances) {
-                    for (int instance2:right_instances) {
+                for (int instance1:right_indices) {
+                    seenNodes.push_back(instance1);
+
+                    for (int instance2:right_indices) {
                         matrix(instance1, instance2)+= 1.0;
-                        // if (instance1 != instance2) {
-                        //     matrix(instance2, instance1)+= 1.0;
-                        // }
                     }
                 }
 
             }
 
             else {
-                Node currentNode = {right_indices, right_instances};
+                Node currentNode = {right_indices};
                 nodes.push(currentNode);
             }
 
@@ -342,40 +376,28 @@ const double& nmin, const vector<int>& coltypes) {
         else {
             cout << "Else" << "\n";
         }
-
-        
+        counter++;
     }
+    if (seenNodes.size() != 150) {
+        cout << seenNodes.size() << endl;
+    }
+
     return matrix;
 }
 
-// void writeToCSVfile(string name, MatrixXd matrix)
-// {
-//   ofstream file(name.c_str());
 
-//   for(int  i = 0; i < matrix.rows(); i++){
-//       for(int j = 0; j < matrix.cols(); j++){
-//          string str = lexical_cast<std::string>(matrix(i,j));
-//          if(j+1 == matrix.cols()){
-//              file<<str;
-//          }else{
-//              file<<str<<',';
-//          }
-//       }
-//       file<<'\n';
-//   }
-// }
 vector<vector<double>> readCSV(string filename, char sep) {
     ifstream dataFile;
     dataFile.open(filename);
     vector<vector<double>> csv;
     while(!dataFile.eof()) {
         string line;
-        getline(dataFile, line, '\r');
+        getline(dataFile, line, '\n');
         stringstream buffer(line);
         string tmp;
         vector<double> values;
 
-        while(getline(buffer, tmp, '\t') ) {
+        while(getline(buffer, tmp, sep) ) {
             values.push_back(strtod(tmp.c_str(), 0));
         }
         csv.push_back(values);
@@ -388,21 +410,22 @@ vector<vector<double>> readCSV(string filename, char sep) {
 int main() {
  
     vector<vector<double>> data;
-    int nTrees = 200;
+    int nTrees = 10000;
     // cout << data.size();
     // std::ifstream i("./data/soybean.json");
     // json j;
     // i >> j;
-    vector<vector<double>> j = readCSV("./data/soybean.data", '\t');
+    vector<vector<double>> j = readCSV("./data/iris_wl.csv", ',');
     vector<int> labels;
     int nrows = j.size();
+    // print(j[0]);
+    // cout << nrows << endl;
     int nmin = floor(nrows/3);
+    // nmin = 0;
+    // cout << nrows << endl;
 
-    cout << nrows << endl;
-    int ncols = j[0].size();
 
-
-    cout << ncols << endl;
+    // cout << ncols << endl;
     // cout << n_cols + " " + n_rows << "\n";
     // for (auto& element : j) {
     //     vector<double> row;
@@ -418,9 +441,9 @@ int main() {
     data = j;
     vector<int> coltypes;
     for (int i=0; i < data[0].size(); i++) {
-        coltypes.push_back(1);
+        coltypes.push_back(0);
     }
-    cout << coltypes.size() << endl;
+    // cout << coltypes.size() << endl;
     // vector<vector<double>> matrix;
     MatrixXd matrix = MatrixXd::Zero(nrows, nrows);
     const auto startTime = high_resolution_clock::now();
@@ -433,11 +456,20 @@ int main() {
 
     }
     const auto endTime = high_resolution_clock::now();
-    printf("Time: %fms\n", duration_cast<duration<double, milli>>(endTime - startTime).count());
+    // printf("Time: %fms\n", duration_cast<duration<double, milli>>(endTime - startTime).count());
     matrix = matrix/nTrees;
+
     // int errors = 0;
-    
-    // std::cout << matrix << std::endl;
+    // cout << matrix.size() << endl; 
+    ofstream fichier("./matrix.csv", ios::out | ios::trunc);  
+    for (int i = 0; i < nrows; i++) {
+        for (int j = 0; j < nrows; j++ ) {
+            fichier << matrix(i,j) << '\t';
+        }
+        fichier << '\n';
+    }
+    // fichier << matrix << '\n';
+    fichier.close();
     // writeToCSVfile("test.csv", matrix);
     return 1;
 }
