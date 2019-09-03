@@ -21,7 +21,7 @@
 
 using json = nlohmann::json;
 using Eigen::MatrixXd;
-using Eigen::MatrixXi;
+using Eigen::MatrixXd;
 using namespace std;
 using std::milli;
 using std::vector;
@@ -228,18 +228,16 @@ struct Node
     // vector<int> instances;
 };
 
-extern "C++" MatrixXi build_randomized_tree_and_get_sim(const vector<vector<float>> &data,
+MatrixXd build_randomized_tree_and_get_sim(const vector<vector<float>> &data,
                                                         const double &nmin, const vector<int> &coltypes, int nTrees)
 {
 
     int nrows = data.size();
     int ncols = data.front().size();
-    MatrixXi matrix = MatrixXi::Zero(nrows, nrows);
+    MatrixXd matrix = MatrixXd::Zero(nrows, nrows);
     #pragma omp parallel for
     for (int loop = 0; loop < nTrees; loop++)
     {
-        vector<int> seenNodes;
-        unordered_set<int> set;
         srand(time(NULL));
 
         queue<Node> nodes;
@@ -276,12 +274,10 @@ extern "C++" MatrixXi build_randomized_tree_and_get_sim(const vector<vector<floa
         {
             for (int instance1 : left_indices)
             {
-                seenNodes.push_back(instance1);
-                set.insert(instance1);
                 for (int instance2 : left_indices)
                 {
                     #pragma omp atomic
-                    matrix(instance1, instance2) += 1.0;
+                    matrix(instance1, instance2) += 1.0/nTrees;
                 }
             }
         }
@@ -296,14 +292,11 @@ extern "C++" MatrixXi build_randomized_tree_and_get_sim(const vector<vector<floa
         {
             for (int instance1 : right_indices)
             {
-                set.insert(instance1);
 
-                seenNodes.push_back(instance1);
                 for (int instance2 : right_indices)
                 {
                     #pragma omp atomic
-
-                    matrix(instance1, instance2) += 1.0;
+                    matrix(instance1, instance2) += 1.0/nTrees;
                 }
             }
         }
@@ -319,7 +312,6 @@ extern "C++" MatrixXi build_randomized_tree_and_get_sim(const vector<vector<floa
         }
 
         // Root node successfully has two children. Now, we iterate over these children.
-        int counter = 0;
         while (!nodes.empty())
         {
 
@@ -331,13 +323,10 @@ extern "C++" MatrixXi build_randomized_tree_and_get_sim(const vector<vector<floa
                     nodes.pop();
                     for (int instance1 : instances)
                     {
-                        set.insert(instance1);
-
-                        seenNodes.push_back(instance1);
                         for (int instance2 : instances)
                         {
                             #pragma omp atomic
-                            matrix(instance1, instance2) += 1.0;
+                            matrix(instance1, instance2) += 1.0/nTrees;
                         }
                     }
                 }
@@ -356,17 +345,14 @@ extern "C++" MatrixXi build_randomized_tree_and_get_sim(const vector<vector<floa
             vector<int> left_indices, right_indices;
             if (nodeIndices.size() >= nmin)
             {
-                if (performSplit(data, attributes_indices, attributes, coltypes, left_indices, right_indices, nodeIndices) == 1)
-                { // We have a column with only one unique value
+                if (performSplit(data, attributes_indices, attributes, coltypes, left_indices, right_indices, nodeIndices) == 1) // We have a column with only one unique value
+                { 
                     for (int instance1 : nodeIndices)
                     {
-                        set.insert(instance1);
-
-                        seenNodes.push_back(instance1);
                         for (int instance2 : nodeIndices)
                         {
                             #pragma omp atomic
-                            matrix(instance1, instance2) += 1.0;
+                            matrix(instance1, instance2) += 1.0/nTrees;
                         }
                     }
                     cout << "Lower bound number of values reached" << endl;
@@ -374,7 +360,7 @@ extern "C++" MatrixXi build_randomized_tree_and_get_sim(const vector<vector<floa
                 }
 
                 vector<int> left_instances, right_instances;
-                vector<vector<float>> left_data, right_data;
+                // vector<vector<float>> left_data, right_data;
 
                 for (int j : left_indices)
                 {
@@ -394,13 +380,10 @@ extern "C++" MatrixXi build_randomized_tree_and_get_sim(const vector<vector<floa
                 {
                     for (int instance1 : left_indices)
                     {
-                        seenNodes.push_back(instance1);
-                        set.insert(instance1);
-
                         for (int instance2 : left_indices)
                         {
                             #pragma omp atomic
-                            matrix(instance1, instance2) += 1.0;
+                            matrix(instance1, instance2) += 1.0/nTrees;
                         }
                     }
                 }
@@ -415,13 +398,10 @@ extern "C++" MatrixXi build_randomized_tree_and_get_sim(const vector<vector<floa
                 {
                     for (int instance1 : right_indices)
                     {
-                        seenNodes.push_back(instance1);
-                        set.insert(instance1);
-
                         for (int instance2 : right_indices)
                         {
                             #pragma omp atomic
-                            matrix(instance1, instance2) += 1.0;
+                            matrix(instance1, instance2) += 1.0/nTrees;
                         }
                     }
                 }
@@ -437,15 +417,6 @@ extern "C++" MatrixXi build_randomized_tree_and_get_sim(const vector<vector<floa
                 cout << "Else"
                      << "\n";
             }
-            counter++;
-        }
-        if (seenNodes.size() != 150)
-        {
-            cout << seenNodes.size() << endl;
-        }
-        if (set.size() != 150)
-        {
-            cout << set.size() << endl;
         }
     }
     return matrix;
@@ -494,16 +465,14 @@ int main()
         coltypes.push_back(0);
     }
 
-    MatrixXi matrix = MatrixXi::Zero(nrows, nrows);
     const auto startTime = high_resolution_clock::now();
-    MatrixXi matrices[nTrees];
 
-    matrix = build_randomized_tree_and_get_sim(data, nmin, coltypes, nTrees);
+    MatrixXd matrix = build_randomized_tree_and_get_sim(data, nmin, coltypes, nTrees);
     const auto endTime = high_resolution_clock::now();
 
     printf("Time: %fms\n", duration_cast<duration<double, milli>>(endTime - startTime).count());
 
-    MatrixXd matrix2 = matrix.cast<double>() / nTrees;
+    // MatrixXd matrix2 = matrix.cast<double>() / nTrees;
 
     cout << matrix(nrows - 1, nrows - 1) << endl;
 
@@ -512,7 +481,7 @@ int main()
     {
         for (int j = 0; j < nrows; j++)
         {
-            fichier << matrix2(i, j) << '\t';
+            fichier << matrix(i, j) << '\t';
         }
         fichier << '\n';
     }
