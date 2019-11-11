@@ -146,11 +146,11 @@ MatrixXd build_randomized_tree_and_get_sim(const vector<vector<float>> &data,
   for (int i=0; i < nrows; i++) {
     nodeIndices.push_back(i);
   }
+  cout << nodeIndices.size() << endl;
   #pragma omp parallel for
   for (int loop = 0; loop < nTrees; loop++)
   {
     list<Node> nodes;
-
     vector<int> attributes, attributes_indices, instanceList;
     for (int i = 0; i < ncols; i++)
     {
@@ -162,17 +162,14 @@ MatrixXd build_randomized_tree_and_get_sim(const vector<vector<float>> &data,
       instanceList.push_back(i);
     }
 
-
     vector<int> left_indices, right_indices, left_instances, right_instances;
     performSplit(data, attributes_indices, attributes, coltypes, left_indices, right_indices, nodeIndices);
-
     for (int i : left_indices) {
       left_instances.push_back(instanceList[i]);
     }
     for (int i : right_indices) {
       right_instances.push_back(instanceList[i]);
     }
-
     if (left_indices.size() < nmin)
     {
       for (int instance1 : left_instances)
@@ -221,7 +218,7 @@ MatrixXd build_randomized_tree_and_get_sim(const vector<vector<float>> &data,
           {
             for (int instance2 : instances)
             {
-#pragma omp atomic
+              #pragma omp atomic
               matrix(instance1, instance2) += 1.0/nTrees;
             }
           }
@@ -239,58 +236,59 @@ MatrixXd build_randomized_tree_and_get_sim(const vector<vector<float>> &data,
 
       if (colNum == 1) // We have a column with only one unique value
       {
-        for (int instance1 : nodeIndices)
+        for (int instance1 : nodeInstances)
         {
-          for (int instance2 : nodeIndices)
-          {
-            #pragma omp atomic
-            matrix(instance1, instance2) += 1.0/nTrees;
-          }
-        }
-        continue;
-      }
-
-      for (int i : left_indices) {
-        left_instances.push_back(nodeInstances[i]);
-      }
-      for (int i : right_indices) {
-        right_instances.push_back(nodeInstances[i]);
-      }
-
-      if (left_indices.size() < nmin)
-      {
-        for (int instance1 : left_instances)
-        {
-          for (int instance2 : left_instances)
+          for (int instance2 : nodeInstances)
           {
             #pragma omp atomic
             matrix(instance1, instance2) += 1.0/nTrees;
           }
         }
       }
-
-      else
+      else 
       {
-        Node currentNode = {left_indices, left_instances};
-        nodes.push_back(currentNode);
-      }
+        for (int i : left_indices) {
+          left_instances.push_back(nodeInstances[i]);
+        }
+        for (int i : right_indices) {
+          right_instances.push_back(nodeInstances[i]);
+        }
 
-      if (right_indices.size() < nmin)
-      {
-        for (int instance1 : right_instances)
+        if (left_indices.size() < nmin)
         {
-          for (int instance2 : right_instances)
+          for (int instance1 : left_instances)
           {
-            #pragma omp atomic
-            matrix(instance1, instance2) += 1.0/nTrees;
+            for (int instance2 : left_instances)
+            {
+              #pragma omp atomic
+              matrix(instance1, instance2) += 1.0/nTrees;
+            }
           }
         }
-      }
 
-      else
-      {
-        Node currentNode = {right_indices, right_instances};
-        nodes.push_back(currentNode);
+        else
+        {
+          Node currentNode = {left_indices, left_instances};
+          nodes.push_back(currentNode);
+        }
+
+        if (right_indices.size() < nmin)
+        {
+          for (int instance1 : right_instances)
+          {
+            for (int instance2 : right_instances)
+            {
+              #pragma omp atomic
+              matrix(instance1, instance2) += 1.0/nTrees;
+            }
+          }
+        }
+
+        else
+        {
+          Node currentNode = {right_indices, right_instances};
+          nodes.push_back(currentNode);
+        }
       }
     }
   }
@@ -320,19 +318,26 @@ vector<vector<float>> readCSV(string filename, char sep)
     return csv;
 }
 
-int main()
+int main(int argc, char *argv[])
 {
 
     vector<vector<float>> data;
-    int nTrees = 250;
+    int nTrees = 500;
 
-    vector<vector<float>> j = readCSV("./data/iris.csv", ',');
+    vector<vector<float>> j;
+    if (argc == 3) {
+      j = readCSV(argv[1], *argv[2]);
+    }
+    else {
+      j = readCSV(argv[1], '\t');
+    }
     vector<int> labels;
     int nrows = j.size();
-
     int nmin = floor(nrows / 3);
 
     data = j;
+    data.pop_back();
+
     vector<int> coltypes;
     for (int i = 0; i < data[0].size(); i++)
     {
@@ -347,10 +352,10 @@ int main()
     printf("Time: %fms\n", duration_cast<duration<double, milli>>(endTime - startTime).count());
 
 
-    ofstream fichier("./matrix.csv", ios::out | ios::trunc);
-    for (int i = 0; i < nrows; i++)
+    ofstream fichier("./matrix_uet.csv", ios::out | ios::trunc);
+    for (int i = 0; i < nrows-1; i++)
     {
-        for (int j = 0; j < nrows; j++)
+        for (int j = 0; j < nrows-1; j++)
         {
             fichier << matrix(i, j) << '\t';
         }
