@@ -1,0 +1,439 @@
+#include <iostream>
+#include <string>
+#include <random>
+#include <cmath>
+#include <algorithm>
+#include <vector>
+#include <ctime>
+#include <string>
+#include <queue>
+#include <fstream>
+#include <sstream>
+#include <iterator>
+#include <cstdio>
+#include <Dense>
+#include <chrono>
+#include <omp.h>
+#include <fstream>
+#include <unordered_set>
+#include <boost/dynamic_bitset.hpp>
+
+using Eigen::MatrixXd;
+using namespace std;
+using std::milli;
+using std::vector;
+using std::chrono::duration;
+using std::chrono::duration_cast;
+using std::chrono::high_resolution_clock;
+using std::sort;
+using boost::dynamic_bitset;
+
+void print(std::vector<float> const &input)
+{
+    for (unsigned int i = 0; i < input.size(); i++)
+    {
+        std::cout << input[i] << " ";
+    }
+}
+
+void print(std::vector<int> const &input)
+{
+    for (unsigned int i = 0; i < input.size(); i++)
+    {
+        std::cout << input[i] << " ";
+    }
+}
+
+float random_split(vector<float> &values, int type)
+{
+    float mean = accumulate( values.begin(), values.end(), 0.0)/values.size(); 
+    double sq_sum = std::inner_product(values.begin(), values.end(), values.begin(), 0.0);
+    double stdev = std::sqrt(sq_sum / values.size() - mean * mean);
+    float split;
+    auto result = std::minmax_element(std::begin(values), std::end(values));
+
+    srand(time(NULL));
+    std::random_device rd;
+    std::mt19937_64 generator(rd());
+    if (type == 0)
+    {
+        std::normal_distribution<double> distribution(mean, stdev);
+
+        float min = *result.first;
+        float max = *result.second;
+        // std::uniform_real_distribution<float> distribution(min, max);
+        split = distribution(generator);
+
+    }
+    else
+    {   
+        // std::uniform_int_distribution<int> dist(0, values.size() - 1);
+        split = 0; //values[dist(generator)];
+    }
+    return split;
+}
+
+vector<float> getColumn(const vector<vector<float>> &v, int attribute)
+{
+    vector<float> col;
+    for (const auto &row : v)
+    {
+        col.push_back(row[attribute]);
+    }
+    return (col);
+}
+
+vector<vector<float>> getRows(const vector<vector<float>> &v, dynamic_bitset<> rows)
+{
+    vector<vector<float>> out;
+    for (int i=0; i<v.size(); i++)
+    {
+        if (rows[i] ==1) {
+            out.push_back(v[i]);
+        }
+    }
+    return (out);
+}
+
+int performSplit(const vector<vector<float>> &dataset, vector<int> &attributesIndices,
+                 const vector<int> attributes, const vector<int> &coltypes, dynamic_bitset<> &left, dynamic_bitset<> &right)
+{
+    std::random_device rd;
+    std::mt19937_64 mt(rd());
+    std::uniform_int_distribution<int> dist (0,attributesIndices.size()-1);
+    int randIndex = dist(mt);
+    int attributeIndex = attributesIndices[randIndex];
+    *attributesIndices.erase(attributesIndices.begin() + randIndex);
+    int attribute = attributes[attributeIndex];
+    int type = coltypes[attribute];
+    vector<float> data;
+
+    data = getColumn(dataset, attribute);
+
+    std::unordered_set<float> set;
+
+    for (const float &i : data)
+    {
+        set.insert(i);
+    }
+
+    if (set.size() <= 1)
+    {
+        return 1;
+    }
+
+    float value = random_split(data, type);
+    for(size_t i = 0; i < dataset.size(); ++i) {
+        left.set(i, data[i] < value);
+        right.set(i, data[i] >= value);
+    }
+    // for (unsigned int i = 0; i < data.size(); i++)
+    // {
+    //     if (data[i] < value)
+    //     {
+    //         left.push_back(i);
+    //     }
+    //     else
+    //     {
+    //         right.push_back(i);
+    //     }
+    // }
+
+    return 0;
+}
+
+int performSplit(const vector<vector<float>> &dataset, vector<int> &attributesIndices,
+                 const vector<int> attributes, const vector<int> &coltypes, dynamic_bitset<> &left, dynamic_bitset<> &right, const dynamic_bitset<> &nodeIndices)
+{
+    std::random_device rd;
+    std::mt19937_64 mt(rd());
+    std::uniform_int_distribution<int> dist (0,attributesIndices.size()-1);
+    int randIndex = dist(mt);
+    int attributeIndex = attributesIndices[randIndex];
+    // cout << attributesIndices.size() << '\n';
+    *attributesIndices.erase(attributesIndices.begin() + randIndex);
+    // cout << attributesIndices.size() << '\n';
+    int attribute = attributes[attributeIndex];
+    int type = coltypes[attribute];
+    vector<float> data;
+    vector<vector<float>> localDataset;
+    // vector<vector<float>> rows = getRows(dataset, nodeIndices);
+
+    data = getColumn(dataset, attribute);
+
+    std::unordered_set<float> set;
+    // cout << data.size() << '\n';
+    // cout << nodeIndices.size() << '\n';
+    for (auto i : data)
+    {
+        // cout << i << '\n';
+        set.insert(i);
+    }
+    // cout << "-" << '\n';
+
+    if (set.size() <= 1)
+    {   
+        return 1;
+    }
+    float value = random_split(data, type);
+    for(size_t i = 0; i < dataset.size(); ++i) {
+        left.set(i, data[i] < value);
+        right.set(i, data[i] >= value);
+    }
+    left = left & nodeIndices;
+    right = right & nodeIndices;
+
+    // for (unsigned int i = 0; i < data.size(); i++)
+    // {
+    //     if (data[i] < value)
+    //     {
+    //         left.push_back(i);
+    //     }
+    //     else
+    //     {
+    //         right.push_back(i);
+    //     }
+    // }
+
+    return 0;
+}
+
+// struct Node
+// {
+//     vector<int> indices;
+//     // vector<int> instances;
+// };
+
+MatrixXd build_randomized_tree_and_get_sim(const vector<vector<float>> &data,
+                                                        const int &nmin, const vector<int> &coltypes, int nTrees)
+{
+    int nrows = data.size();
+    int ncols = data.front().size();
+    MatrixXd matrix = MatrixXd::Zero(nrows, nrows);
+    #pragma omp parallel for
+
+    for (int loop = 0; loop < nTrees; loop++)
+    {
+        queue<dynamic_bitset<>> nodes;
+
+        vector<int> attributes, attributes_indices;
+        for (unsigned int i = 0; i < ncols; i++)
+        {
+            attributes_indices.push_back(i);
+            attributes.push_back(i);
+        }
+        dynamic_bitset<> left_indices(nrows), right_indices(nrows);
+        performSplit(data, attributes_indices, attributes, coltypes, left_indices, right_indices);      
+        if (left_indices.count() < nmin)
+        {
+            for (int i=0; i < nrows; i++)
+            {
+                for (int j=0; j < nrows; j++)
+                {
+                    if (left_indices[i] == 1 and left_indices[j] == 1) {
+                        #pragma omp atomic
+                        matrix(i, j) += 1.0/nTrees;
+                    }
+                }
+            }
+        }
+
+        else
+        {
+            // Node currentNode = {left_indices};
+            nodes.push(left_indices);
+        }
+
+        if (right_indices.count() < nmin)
+        {
+
+            for (int i=0; i < nrows; i++)
+            {
+
+                for (int j=0; j < nrows; j++)
+                {
+                    if (right_indices[i] == 1 and right_indices[j] == 1) {
+
+                        #pragma omp atomic
+                        matrix(i, j) += 1.0/nTrees;
+                    }
+                }
+            }
+        }
+        else
+        {
+            // Node currentNode = {right_indices};
+            nodes.push(right_indices);
+        }
+
+        // Root node successfully has two children. Now, we iterate over these children.
+        while (!nodes.empty())
+        {
+            if (attributes_indices.size() < 3)
+            {
+                while (!nodes.empty())
+                {
+                    dynamic_bitset<> indices = nodes.front();
+                    nodes.pop();
+                    for (int i=0; i < nrows; i++)
+                    {
+
+                        for (int j=0; j < nrows; j++)
+                        {
+                            if (indices[i] == 1 and indices[j] == 1) {
+
+                                #pragma omp atomic
+                                matrix(i, j) += 1.0/nTrees;
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {  
+                dynamic_bitset<> nodeIndices = nodes.front();
+                nodes.pop();
+                dynamic_bitset<> left_indices(nrows), right_indices(nrows);
+                if (nodeIndices.count() >= nmin) {
+                    // cout << nodeIndices.size() << '\n';
+                    int colNum = performSplit(data, attributes_indices, attributes, coltypes, left_indices, right_indices, nodeIndices);
+                    // cout << colNum << 's\n';
+ 
+                    if (colNum == 1) // We have a column with only one unique value
+                    {   
+                        cout << "Column with one value" << '\n';
+                        for (int i=0; i < nrows; i++)
+                        {
+
+                            for (int j=0; j < nrows; j++)
+                            {
+                                if (nodeIndices[i] == 1 and nodeIndices[j] == 1) {
+
+                                    #pragma omp atomic
+                                    matrix(i, j) += 1.0/nTrees;
+                                }
+                            }
+                        }
+                        continue;
+                    }
+
+                    if (left_indices.count() < nmin)
+                    {
+
+                        for (int i=0; i < nrows; i++)
+                        {
+
+                            for (int j=0; j < nrows; j++)
+                            {
+                                if (left_indices[i] == 1 and left_indices[j] == 1) {
+
+                                    #pragma omp atomic
+                                    matrix(i, j) += 1.0/nTrees;
+                                }
+                            }
+                        }
+                    }
+
+                    else
+                    {
+                        // Node currentNode = {left_indices};
+                        nodes.push(left_indices);
+                    }
+
+                    // if (right_indices.count() < nmin)
+                    // {
+
+                    //     for (int i=0; i < nrows; i++)
+                    //     {
+
+                    //         for (int j=0; j < nrows; j++)
+                    //         {
+                    //             if (right_indices[i] == 1 and right_indices[j] == 1) {
+                    //                 #pragma omp atomic
+                    //                 matrix(i, j) += 1.0/nTrees;
+                    //             }
+                    //         }
+                    //     }
+                    // }
+
+                    // else
+                    // {
+                    //     // Node currentNode = {right_indices};
+                    //     nodes.push(right_indices);
+                    // }
+            }
+
+        else
+        {
+            cout << "How did that happen?" << endl;
+        }
+    }
+    }
+    }
+    return matrix;
+}
+
+vector<vector<float>> readCSV(string filename, char sep)
+{
+    ifstream dataFile;
+    dataFile.open(filename);
+    vector<vector<float>> csv;
+    while (!dataFile.eof())
+    {
+        string line;
+        getline(dataFile, line, '\n');
+        stringstream buffer(line);
+        string tmp;
+        vector<float> values;
+
+        while (getline(buffer, tmp, sep))
+        {
+            values.push_back(strtod(tmp.c_str(), 0));
+        }
+        csv.push_back(values);
+    }
+
+    return csv;
+}
+
+int main()
+{
+
+    vector<vector<float>> data;
+    int nTrees = 250;
+
+    vector<vector<float>> j = readCSV("./data/iris.csv", ',');
+    vector<int> labels;
+    int nrows = j.size();
+
+    int nmin = floor(nrows / 3);
+
+    data = j;
+    vector<int> coltypes;
+    for (int i = 0; i < data[0].size(); i++)
+    {
+        coltypes.push_back(0);
+    }
+
+    const auto startTime = high_resolution_clock::now();
+
+    MatrixXd matrix = build_randomized_tree_and_get_sim(data, nmin, coltypes, nTrees);
+    const auto endTime = high_resolution_clock::now();
+
+    printf("Time: %fms\n", duration_cast<duration<double, milli>>(endTime - startTime).count());
+
+
+    ofstream fichier("./matrix.csv", ios::out | ios::trunc);
+    for (int i = 0; i < nrows; i++)
+    {
+        for (int j = 0; j < nrows; j++)
+        {
+            fichier << matrix(i, j) << '\t';
+        }
+        fichier << '\n';
+    }
+    fichier.close();
+    // writeToCSVfile("test.csv", matrix);
+
+    return 1;
+}

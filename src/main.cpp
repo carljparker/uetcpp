@@ -12,11 +12,12 @@
 #include <sstream>
 #include <iterator>
 #include <cstdio>
-#include "../Eigen/Eigen"
+#include <Eigen/Eigen>
 #include <chrono>
 #include <omp.h>
 #include <fstream>
 #include <unordered_set>
+#include <cxxopts.hpp>
 
 using Eigen::MatrixXd;
 
@@ -89,9 +90,8 @@ int performSplit(const vector<vector<float>> &dataset, vector<int> &attributesIn
   
   *attributesIndices.erase(attributesIndices.begin() + randIndex);
   int attribute = attributes[attributeIndex];
-  
   //Get the corresponding column type
-  int type = coltypes[attribute];
+  int type = coltypes.at(attribute);
   vector<vector<float>> localDataset = getRows(dataset, nodeIndices);
   vector<float> data;
 
@@ -115,17 +115,33 @@ int performSplit(const vector<vector<float>> &dataset, vector<int> &attributesIn
   
   
   //Fill the indices
-  for (int i = 0; i < data.size(); i++)
-  {
-      if (data[i] < value)
-      {
-        left.push_back(i);
-      }
-      else
-      {
-        right.push_back(i);
-      }
+
+  if (type == 0) { // Continuous attribute
+    for (int i = 0; i < data.size(); i++)
+    {
+        if (data[i] < value)
+        {
+          left.push_back(i);
+        }
+        else
+        {
+          right.push_back(i);
+        }
+    }
   }
+  else {
+      for (int i = 0; i < data.size(); i++) {
+        if (data[i] == value)
+        {
+          left.push_back(i);
+        }
+        else
+        {
+          right.push_back(i);
+        }
+    }  
+  }
+
   return 0;
 }
 
@@ -143,10 +159,10 @@ MatrixXd build_randomized_tree_and_get_sim(const vector<vector<float>> &data,
   int ncols=firstVector.size();
   MatrixXd matrix = MatrixXd::Zero(nrows, nrows);
   vector<int> nodeIndices;
+
   for (int i=0; i < nrows; i++) {
     nodeIndices.push_back(i);
   }
-  cout << nodeIndices.size() << endl;
   #pragma omp parallel for
   for (int loop = 0; loop < nTrees; loop++)
   {
@@ -318,32 +334,44 @@ vector<vector<float>> readCSV(string filename, char sep)
     return csv;
 }
 
-int main(int argc, char *argv[])
+int main(int argc, char** argv)
 {
 
-    vector<vector<float>> data;
-    int nTrees = 500;
+    cxxopts::Options options("uetcpp", "An implementation of UET");
+    options.add_options()
+    ("p,path", "Data path", cxxopts::value<string>())
+    ("s,sep", "Separator", cxxopts::value<char>()->default_value("\t"))
+    ("c,ctypes", "Coltypes",  cxxopts::value<string>())
+    ("n,nmin", "Nmin", cxxopts::value<float>()->default_value("0.33"))
+    ("t,ntrees", "Number of trees",  cxxopts::value<int>()->default_value("500"));
+ 
+    auto result = options.parse(argc, argv);
+    string path = result["path"].as<string>();
+    char sep = result["sep"].as<char>();
+    
+    string coltypesString = result["ctypes"].as<string>();
+    float nminPercent = result["nmin"].as<float>();
+    int nTrees = result["ntrees"].as<int>();
 
-    vector<vector<float>> j;
-    if (argc == 3) {
-      j = readCSV(argv[1], *argv[2]);
+    vector<vector<float>> data;
+    data = readCSV(path, sep);
+    int nrows = data.size();
+    int nmin = floor(nminPercent*nrows);
+    vector<int> coltypes;
+    if (coltypesString.back() == ',') {
+      for (int i=0; i <= nrows; i++) {
+        coltypes.push_back(0);
+      }
     }
     else {
-      j = readCSV(argv[1], '\t');
+      for (auto i : coltypesString) {
+        coltypes.push_back(int(i));
+      }
     }
-    vector<int> labels;
-    int nrows = j.size();
-    int nmin = floor(nrows / 3);
 
-    data = j;
     data.pop_back();
 
-    vector<int> coltypes;
-    for (int i = 0; i < data[0].size(); i++)
-    {
-        coltypes.push_back(0);
-    }
-
+  
     const auto startTime = high_resolution_clock::now();
     
     MatrixXd matrix = build_randomized_tree_and_get_sim(data, nmin, coltypes, nTrees);
