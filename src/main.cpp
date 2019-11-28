@@ -151,7 +151,7 @@ struct Node
   vector<int> instances;
 };
 
-MatrixXd build_randomized_tree_and_get_sim(const vector<vector<float>> &data,
+MatrixXd getSim(const vector<vector<float>> &data,
                                            const int &nmin, const vector<int> &coltypes, int nTrees)
 {
   int nrows = data.size();
@@ -311,6 +311,162 @@ MatrixXd build_randomized_tree_and_get_sim(const vector<vector<float>> &data,
   return matrix;
 }
 
+MatrixXd getDist(const vector<vector<float>> &data,
+                                           const int &nmin, const vector<int> &coltypes, int nTrees)
+{
+  int nrows = data.size();
+  vector<float> firstVector=data[0];
+  int ncols=firstVector.size();
+  MatrixXd matrix = MatrixXd::Zero(nrows, nrows);
+  vector<int> nodeIndices;
+
+  for (int i=0; i < nrows; i++) {
+    nodeIndices.push_back(i);
+  }
+  #pragma omp parallel for
+  for (int loop = 0; loop < nTrees; loop++)
+  {
+    list<Node> nodes;
+    vector<int> attributes, attributes_indices, instanceList;
+    for (int i = 0; i < ncols; i++)
+    {
+      attributes_indices.push_back(i);
+      attributes.push_back(i);
+    }
+
+    for (int i=0; i < nrows; i++) {
+      instanceList.push_back(i);
+    }
+
+    vector<int> left_indices, right_indices, left_instances, right_instances;
+    performSplit(data, attributes_indices, attributes, coltypes, left_indices, right_indices, nodeIndices);
+    for (int i : left_indices) {
+      left_instances.push_back(instanceList[i]);
+    }
+    for (int i : right_indices) {
+      right_instances.push_back(instanceList[i]);
+    }
+    if (left_indices.size() < nmin and left_instances.size() != 0)
+    {
+      for (int instance1 : left_instances)
+      {
+        for (int instance2 : left_instances)
+        {
+          matrix(instance1, instance2) += left_instances.size();
+        }
+      }
+    }
+
+    else
+    {
+      Node currentNode = {left_indices, left_instances};
+      nodes.push_back(currentNode);
+    }
+
+    if (right_indices.size() < nmin and right_instances.size() != 0)
+    {
+      for (int instance1 : right_instances)
+      {
+
+        for (int instance2 : right_instances)
+        {
+          matrix(instance1, instance2) += right_instances.size();
+        }
+      }
+    }
+    {
+      Node currentNode = {right_indices, right_instances};
+      nodes.push_back(currentNode);
+    }
+    
+    for (int instance1 : left_instances) {
+        for (int instance2 : right_instances) {
+              matrix(instance2,instance1) = matrix(instance1,instance2) += (left_instances.size() + right_instances.size());
+
+        }
+    }
+    // Root node successfully has two children. Now, we iterate over these children.
+    while (!nodes.empty())
+    {
+      if (attributes_indices.size() < 1)
+      {
+        for (Node node : nodes)
+        {
+          vector<int> instances = node.instances;
+          for (int instance1 : instances)
+          {
+            for (int instance2 : instances)
+            {
+              matrix(instance1, instance2) += 1;
+            }
+          }
+        }
+        break;
+      }
+
+      Node currentNode = nodes.front();
+      nodes.pop_front();
+
+      vector<int> nodeIndices = currentNode.indices;
+      vector<int> nodeInstances = currentNode.instances;
+      vector<int> left_indices, right_indices, left_instances, right_instances;
+      int colNum = performSplit(data, attributes_indices, attributes, coltypes, left_indices, right_indices, nodeIndices);
+
+      if (colNum == 0)
+      {
+      for (int i : left_indices) {
+        left_instances.push_back(nodeInstances[i]);
+      }
+      for (int i : right_indices) {
+        right_instances.push_back(nodeInstances[i]);
+      }
+
+      if (left_indices.size() < nmin and left_indices.size() != 0)
+      {
+        for (int instance1 : left_instances)
+        {
+          for (int instance2 : left_instances)
+          {
+            matrix(instance1, instance2) += left_instances.size();
+          }
+        }
+      }
+
+      else
+      {
+        Node currentNode = {left_indices, left_instances};
+        nodes.push_back(currentNode);
+      }
+
+      if (right_indices.size() < nmin and right_indices.size() != 0)
+      {
+        for (int instance1 : right_instances)
+        {
+          for (int instance2 : right_instances)
+          {
+            matrix(instance1, instance2) += right_instances.size();
+          }
+        }
+      }
+
+      else
+      {
+        Node currentNode = {right_indices, right_instances};
+        nodes.push_back(currentNode);
+      }
+    }
+
+        for (int instance1 : left_instances) {
+            for (int instance2 : right_instances) {
+              matrix(instance2,instance1) = matrix(instance1,instance2) += (left_instances.size() + right_instances.size());
+
+        }
+    }
+  }
+  }
+  return matrix/(nrows*nTrees);
+}
+
 vector<vector<float>> readCSV(string filename, char sep)
 {
     ifstream dataFile;
@@ -337,14 +493,16 @@ vector<vector<float>> readCSV(string filename, char sep)
 int main(int argc, char** argv)
 {
 
+    cout << "Hello ?" << endl;
     cxxopts::Options options("uetcpp", "An implementation of UET");
     options.add_options()
     ("p,path", "Data path", cxxopts::value<string>())
     ("s,sep", "Separator", cxxopts::value<char>()->default_value("\t"))
     ("c,ctypes", "Coltypes",  cxxopts::value<string>())
     ("n,nmin", "Nmin", cxxopts::value<float>()->default_value("0.33"))
-    ("t,ntrees", "Number of trees",  cxxopts::value<int>()->default_value("500"));
- 
+    ("t,ntrees", "Number of trees",  cxxopts::value<int>()->default_value("500"))
+    ("m,massbased", "Mass-based dissimilarity",  cxxopts::value<int>()->default_value("0"));
+
     auto result = options.parse(argc, argv);
     string path = result["path"].as<string>();
     char sep = result["sep"].as<char>();
@@ -352,29 +510,42 @@ int main(int argc, char** argv)
     string coltypesString = result["ctypes"].as<string>();
     float nminPercent = result["nmin"].as<float>();
     int nTrees = result["ntrees"].as<int>();
-
+    int massBased = result["massbased"].as<int>();
     vector<vector<float>> data;
     data = readCSV(path, sep);
     int nrows = data.size();
+    int ncols = data[0].size();
     int nmin = floor(nminPercent*nrows);
     vector<int> coltypes;
-    if (coltypesString.back() == ',') {
-      for (int i=0; i <= nrows; i++) {
-        coltypes.push_back(0);
+    if (coltypesString.back() == ',') { // All attributes are of the same type
+      if (coltypesString.front() == '0') {
+        for (int i=0; i <= ncols; i++) {
+          coltypes.push_back(0);
+        }
       }
+      else {
+        for (int i=0; i <= ncols; i++) {
+          coltypes.push_back(1);
+        }
+      } 
     }
     else {
-      for (auto i : coltypesString) {
-        coltypes.push_back(int(i));
+      for (int i : coltypesString) {
+        coltypes.push_back(i-48);
       }
     }
 
     data.pop_back();
 
-  
+    MatrixXd matrix;
     const auto startTime = high_resolution_clock::now();
     
-    MatrixXd matrix = build_randomized_tree_and_get_sim(data, nmin, coltypes, nTrees);
+    if (massBased == 0) {
+        matrix = getSim(data, nmin, coltypes, nTrees);
+    }
+    else {
+        matrix = getDist(data, 0, coltypes, nTrees);
+    }
     const auto endTime = high_resolution_clock::now();
 
     printf("Time: %fms\n", duration_cast<duration<double, milli>>(endTime - startTime).count());
