@@ -116,31 +116,31 @@ int performSplit(const vector<vector<float>> &dataset, vector<int> &attributesIn
   
   //Fill the indices
 
-  if (type == 0) { // Continuous attribute
-    for (int i = 0; i < data.size(); i++)
-    {
-        if (data[i] < value)
-        {
-          left.push_back(i);
-        }
-        else
-        {
-          right.push_back(i);
-        }
-    }
+  // if (type == 0) { // Continuous attribute
+  for (int i = 0; i < data.size(); i++)
+  {
+      if (data[i] < value)
+      {
+        left.push_back(i);
+      }
+      else
+      {
+        right.push_back(i);
+      }
   }
-  else {
-      for (int i = 0; i < data.size(); i++) {
-        if (data[i] == value)
-        {
-          left.push_back(i);
-        }
-        else
-        {
-          right.push_back(i);
-        }
-    }  
-  }
+  // }
+  // else {
+  //     for (int i = 0; i < data.size(); i++) {
+  //       if (data[i] == value)
+  //       {
+  //         left.push_back(i);
+  //       }
+  //       else
+  //       {
+  //         right.push_back(i);
+  //       }
+  //   }  
+  // }
 
   return 0;
 }
@@ -489,11 +489,14 @@ vector<vector<float>> readCSV(string filename, char sep)
 
     return csv;
 }
+int getNmin (vector<double> stds) {
+  int minIndex  = std::min_element(stds.begin(), stds.end()) - stds.begin();
+  return minIndex;
+}
 
 int main(int argc, char** argv)
 {
 
-    cout << "Hello ?" << endl;
     cxxopts::Options options("uetcpp", "An implementation of UET");
     options.add_options()
     ("p,path", "Data path", cxxopts::value<string>())
@@ -538,14 +541,33 @@ int main(int argc, char** argv)
     data.pop_back();
 
     MatrixXd matrix;
+
+    vector<double> std_devs;
+    vector<int> nmins = {0.05*nrows, 0.10*nrows, 0.15*nrows, 0.20*nrows, 0.25*nrows, 0.3*nrows, 0.35*nrows, 0.40*nrows ,0.45*nrows, 0.50*nrows, 0.55*nrows, 0.60*nrows};
+
+    for (int nmin :  nmins) {
+      if (massBased == 0) {
+          matrix = getSim(data, nmin, coltypes, 500);
+          MatrixXd mean = MatrixXd::Constant(data.size(), data.size(), matrix.mean());
+          float sd = sqrt(1/(matrix.array() - mean.array()).pow(2).sum());
+          cout << sd << endl;
+          std_devs.push_back(sd);
+      }
+      else {
+          matrix = getDist(data, 0, coltypes, nTrees);
+      }
+    }
+    nmin = nmins.at(getNmin(std_devs));
+    cout << nmin << endl;
+
     const auto startTime = high_resolution_clock::now();
-    
-    if (massBased == 0) {
-        matrix = getSim(data, nmin, coltypes, nTrees);
-    }
-    else {
-        matrix = getDist(data, 0, coltypes, nTrees);
-    }
+      if (massBased == 0) {
+          matrix = getSim(data, nmin, coltypes, nTrees);
+      }
+      else {
+          matrix = getDist(data, 0, coltypes, nTrees);
+      }
+
     const auto endTime = high_resolution_clock::now();
 
     printf("Time: %fms\n", duration_cast<duration<double, milli>>(endTime - startTime).count());
