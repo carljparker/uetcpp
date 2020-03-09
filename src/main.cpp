@@ -504,8 +504,8 @@ int main(int argc, char** argv)
     ("c,ctypes", "Coltypes",  cxxopts::value<string>())
     ("n,nmin", "Nmin", cxxopts::value<float>()->default_value("0.33"))
     ("t,ntrees", "Number of trees",  cxxopts::value<int>()->default_value("500"))
-    ("m,massbased", "Mass-based dissimilarity",  cxxopts::value<int>()->default_value("0"));
-
+    ("m,massbased", "Mass-based dissimilarity",  cxxopts::value<int>()->default_value("0"))
+    ("o,optimize", "Find optimal parameters", cxxopts::value<int>()->default_value("0"));
     auto result = options.parse(argc, argv);
     string path = result["path"].as<string>();
     char sep = result["sep"].as<char>();
@@ -541,24 +541,44 @@ int main(int argc, char** argv)
     data.pop_back();
 
     MatrixXd matrix;
-
-    vector<double> std_devs;
-    vector<int> nmins = {0.05*nrows, 0.10*nrows, 0.15*nrows, 0.20*nrows, 0.25*nrows, 0.3*nrows, 0.35*nrows, 0.40*nrows ,0.45*nrows, 0.50*nrows, 0.55*nrows, 0.60*nrows};
-
-    for (int nmin :  nmins) {
-      if (massBased == 0) {
-          matrix = getSim(data, nmin, coltypes, 500);
-          MatrixXd mean = MatrixXd::Constant(data.size(), data.size(), matrix.mean());
-          float sd = sqrt(1/(matrix.array() - mean.array()).pow(2).sum());
-          cout << sd << endl;
-          std_devs.push_back(sd);
+    if(result["optimize"].as<int>() == 1) {
+      vector<double> std_devs;
+      vector<int> nmins = {0.05*nrows, 0.10*nrows, 0.15*nrows, 0.20*nrows, 0.25*nrows, 0.3*nrows, 0.35*nrows, 0.40*nrows,0.45*nrows, 0.50*nrows, 0.55*nrows, 0.60*nrows};
+      vector<int> ntrees = {50, 100, 200, 500, 1000, 2000, 10000};
+      for (int nmin :  nmins) {
+        if (massBased == 0) {
+            matrix = getSim(data, nmin, coltypes, 500);
+            MatrixXd mean = MatrixXd::Constant(data.size(), data.size(), matrix.mean());
+            float sd = sqrt(1/(matrix.array() - mean.array()).pow(2).sum());
+            std_devs.push_back(sd);
+        }
+        else {
+            matrix = getDist(data, 0, coltypes, nTrees);
+        }
       }
-      else {
-          matrix = getDist(data, 0, coltypes, nTrees);
+      nmin = nmins.at(getNmin(std_devs));
+      cout << nmin << endl;
+      float previousSd = 0;
+      for (int ntree : ntrees) {
+        if (massBased == 0) {
+            matrix = getSim(data, nmin, coltypes, ntree);
+            MatrixXd mean = MatrixXd::Constant(data.size(), data.size(), matrix.mean());
+            float sd = sqrt(1/(matrix.array() - mean.array()).pow(2).sum());
+            if (abs(sd-previousSd) < 0.005) {
+              nTrees = ntree;
+              cout << ntree << endl;
+              break;
+            }
+
+            previousSd = sd;
+            std_devs.push_back(sd);
+        }
+        else {
+            matrix = getDist(data, 0, coltypes, nTrees);
+        }      
       }
     }
-    nmin = nmins.at(getNmin(std_devs));
-    cout << nmin << endl;
+
 
     const auto startTime = high_resolution_clock::now();
       if (massBased == 0) {
@@ -567,6 +587,8 @@ int main(int argc, char** argv)
       else {
           matrix = getDist(data, 0, coltypes, nTrees);
       }
+
+
 
     const auto endTime = high_resolution_clock::now();
 
