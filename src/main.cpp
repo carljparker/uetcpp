@@ -18,6 +18,7 @@
 #include <fstream>
 #include <unordered_set>
 #include <cxxopts.hpp>
+#include <iomanip>
 
 using Eigen::MatrixXd;
 
@@ -490,18 +491,32 @@ vector<vector<float>> readCSV(string filename, char sep)
     return csv;
 }
 int getNmin (vector<double> stds) {
-  int minIndex  = std::min_element(stds.begin(), stds.end()) - stds.begin();
+  int minIndex  = std::max_element(stds.begin(), stds.end()) - stds.begin();
   return minIndex;
+}
+
+
+
+double square(double x) {
+  return x*x;
+}
+
+double sqrtMat(double x) {
+  if (x != 0) {
+    return sqrt(x);
+  }
+  else {
+    return 0;
+  }
 }
 
 int main(int argc, char** argv)
 {
-
     cxxopts::Options options("uetcpp", "An implementation of UET");
     options.add_options()
     ("p,path", "Data path", cxxopts::value<string>())
     ("s,sep", "Separator", cxxopts::value<char>()->default_value("\t"))
-    ("c,ctypes", "Coltypes",  cxxopts::value<string>())
+    ("c,ctypes", "Coltypes",  cxxopts::value<string>()->default_value("0,"))
     ("n,nmin", "Nmin", cxxopts::value<float>()->default_value("0.33"))
     ("t,ntrees", "Number of trees",  cxxopts::value<int>()->default_value("500"))
     ("m,massbased", "Mass-based dissimilarity",  cxxopts::value<int>()->default_value("0"))
@@ -541,15 +556,27 @@ int main(int argc, char** argv)
     data.pop_back();
 
     MatrixXd matrix;
+    int size = data.size()*data.size();
     if(result["optimize"].as<int>() == 1) {
       vector<double> std_devs;
-      vector<int> nmins = {0.05*nrows, 0.10*nrows, 0.15*nrows, 0.20*nrows, 0.25*nrows, 0.3*nrows, 0.35*nrows, 0.40*nrows,0.45*nrows, 0.50*nrows, 0.55*nrows, 0.60*nrows};
+      vector<double> nmins = {0.05*nrows, 0.10*nrows, 0.15*nrows, 0.20*nrows, 0.25*nrows, 0.3*nrows, 0.35*nrows, 0.40*nrows,0.45*nrows, 0.50*nrows, 0.55*nrows, 0.60*nrows};
       vector<int> ntrees = {50, 100, 200, 500, 1000, 2000, 10000};
-      for (int nmin :  nmins) {
+      MatrixXd dist;
+      MatrixXd ones = MatrixXd::Constant(data.size(), data.size(),1);
+      for (double nmin :  nmins) {
         if (massBased == 0) {
-            matrix = getSim(data, nmin, coltypes, 500);
-            MatrixXd mean = MatrixXd::Constant(data.size(), data.size(), matrix.mean());
-            float sd = sqrt(1/(matrix.array() - mean.array()).pow(2).sum());
+            matrix = getSim(data, (int) ceil(nmin), coltypes, 500);
+            // Eigen::MatrixXf matrix = matrix.cast<float>();
+            dist = (ones-matrix);
+            // dist.diagonal() -= dist.diagonal();
+            // dist = dist.unaryExpr(&sqrtMat);
+
+            // MatrixXd mean = MatrixXd::Constant(data.size(), data.size(), dist.mean());
+            // cout << sqrt((dist-mean).unaryExpr(&square).sum()/22500) << endl;
+            // cout << sqrt(((dist-mean).unaryExpr(&square).sum())/(150^2)) << endl;
+            // float sd = sqrt(((dist-mean).unaryExpr(&square).sum())/size);
+            float sd = dist.sum();
+            cout << sd << endl;
             std_devs.push_back(sd);
         }
         else {
@@ -562,9 +589,15 @@ int main(int argc, char** argv)
       for (int ntree : ntrees) {
         if (massBased == 0) {
             matrix = getSim(data, nmin, coltypes, ntree);
-            MatrixXd mean = MatrixXd::Constant(data.size(), data.size(), matrix.mean());
-            float sd = sqrt(1/(matrix.array() - mean.array()).pow(2).sum());
-            if (abs(sd-previousSd) < 0.005) {
+            dist = ones-matrix;
+            dist.diagonal() -= dist.diagonal();
+            dist = dist.unaryExpr(&sqrtMat);
+
+            MatrixXd mean = MatrixXd::Constant(data.size(), data.size(), dist.mean());
+            // cout << sqrt((dist-mean).unaryExpr(&square).sum()/22500) << endl;
+            // cout << sqrt(((dist-mean).unaryExpr(&square).sum())/(150^2)) << endl;
+            float sd = sqrt(((dist-mean).unaryExpr(&square).sum())/size);
+            if (abs(sd-previousSd) < 0.001) {
               nTrees = ntree;
               cout << ntree << endl;
               break;
