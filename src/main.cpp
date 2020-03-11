@@ -564,43 +564,88 @@ int main(int argc, char** argv)
       MatrixXd dist;
       MatrixXd ones = MatrixXd::Constant(data.size(), data.size(),1);
       for (double nmin :  nmins) {
+        double meanSd = 0;
+
+        for (int i = 0; i < 20; i++) {
         if (massBased == 0) {
-            matrix = getSim(data, (int) ceil(nmin), coltypes, 500);
+            matrix = getSim(data, (int) floor(nmin), coltypes, 1500);
             // Eigen::MatrixXf matrix = matrix.cast<float>();
             dist = (ones-matrix);
+            dist.diagonal() -= dist.diagonal();
+            dist = dist.unaryExpr(&sqrtMat);
+            // double coeff = dist.maxCoeff()-dist.minCoeff();
+
+            // cout << coeff << endl;
+            // dist = (dist - MatrixXd::Constant(data.size(),data.size(), dist.minCoeff())).eval()/coeff;
+            // cout << dist << endl;
+            // MatrixXd mean = MatrixXd::Constant(data.size(), data.size(), dist.mean());
+            // cout << sqrt((dist-mean).unaryExpr(&square).sum()/22500) << endl;
+            // cout << sqrt(((dist-mean).unaryExpr(&square).sum())/(150^2)) << endl;
+            // float sd = sqrt(((dist-mean).unaryExpr(&square).sum())/size);
+            float sd = 0;
+            vector<double> values;
+            double min = 1;
+            double max = 0;
+            for (int i = 0; i < nrows-1; i++) {
+              for (int j = 0; j < nrows-1; j++) {
+                if (j < i) {
+                  double value = dist(i,j);
+                  if (value < min) {
+                    min = value;
+                  }
+                  if (value > max) {
+                    max = value;
+                  }
+                  values.push_back(value);
+                  // sd += (dist(i,j)-dist.minCoeff())/coeff;
+                }
+              }
+            }
+
+            if (max != min) {
+
+                for (double value : values) {
+                    sd += (value-min)/(max-min);
+                  }
+            }
+            // float sd = dist.sum();
+            // cout << min << " " << max << " "<< nmin << " " << sd << endl;
+            meanSd += sd;
+        }
+        else {
+            matrix = getDist(data, 0, coltypes, nTrees);
+        }
+        }
+        // cout << meanSd/10 << endl;
+        std_devs.push_back(meanSd/10);
+      }
+      nmin = nmins.at(getNmin(std_devs));
+      cout << nmin << endl;
+
+
+      float previousSd = 0;
+      int bestTrees = 0;
+      for (int ntree : ntrees) {
+        if (massBased == 0) {
+            matrix = getSim(data, nmin, coltypes, ntree);
+            // dist = ones-matrix;
             // dist.diagonal() -= dist.diagonal();
             // dist = dist.unaryExpr(&sqrtMat);
 
             // MatrixXd mean = MatrixXd::Constant(data.size(), data.size(), dist.mean());
             // cout << sqrt((dist-mean).unaryExpr(&square).sum()/22500) << endl;
             // cout << sqrt(((dist-mean).unaryExpr(&square).sum())/(150^2)) << endl;
-            // float sd = sqrt(((dist-mean).unaryExpr(&square).sum())/size);
-            float sd = dist.sum();
-            cout << sd << endl;
-            std_devs.push_back(sd);
-        }
-        else {
-            matrix = getDist(data, 0, coltypes, nTrees);
-        }
-      }
-      nmin = nmins.at(getNmin(std_devs));
-      cout << nmin << endl;
-      float previousSd = 0;
-      for (int ntree : ntrees) {
-        if (massBased == 0) {
-            matrix = getSim(data, nmin, coltypes, ntree);
-            dist = ones-matrix;
-            dist.diagonal() -= dist.diagonal();
-            dist = dist.unaryExpr(&sqrtMat);
-
-            MatrixXd mean = MatrixXd::Constant(data.size(), data.size(), dist.mean());
-            // cout << sqrt((dist-mean).unaryExpr(&square).sum()/22500) << endl;
-            // cout << sqrt(((dist-mean).unaryExpr(&square).sum())/(150^2)) << endl;
-            float sd = sqrt(((dist-mean).unaryExpr(&square).sum())/size);
-            if (abs(sd-previousSd) < 0.001) {
+            float sd =  matrix.sum();//sqrt(((dist-mean).unaryExpr(&square).sum())/size);
+            // cout << sd << endl;
+            // cout << abs(sd-previousSd)/previousSd << endl;
+            if (abs(sd-previousSd)/previousSd < 0.005) {
               nTrees = ntree;
-              cout << ntree << endl;
+              // cout << ntree << endl;
+              bestTrees = ntree;
               break;
+            }
+            else {
+              bestTrees = ntree;
             }
 
             previousSd = sd;
@@ -610,6 +655,7 @@ int main(int argc, char** argv)
             matrix = getDist(data, 0, coltypes, nTrees);
         }      
       }
+      cout << bestTrees << endl;
     }
 
 
