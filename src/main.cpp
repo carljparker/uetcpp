@@ -35,27 +35,33 @@ float random_split(vector<float> values, int type)
 {
   float split;
   auto result = std::minmax_element(std::begin(values), std::end(values));
-  
+  double sum = std::accumulate(values.begin(), values.end(), 0.0);
+  double mean = sum / values.size();
+
+  double sq_sum = std::inner_product(values.begin(), values.end(), values.begin(), 0.0);
+  double stdev = std::sqrt(sq_sum / values.size() - mean * mean);
   srand(time(NULL));
   std::random_device rd;
   std::mt19937_64 generator(rd());
   if (type == 0)
   {
-    std::uniform_real_distribution<float> distribution(*result.first, *result.second);
+    std:uniform_real_distribution<float> distribution(*result.first, *result.second);
     split = distribution(generator);
   }
   else
-  { 
-    std::uniform_int_distribution<int> distribution(0, values.size()-1);  
+  {
+    std::uniform_int_distribution<int> distribution(0, values.size()-1);
     split = values[distribution(generator)];
   }
-  
+
   return split;
 }
 
 vector<float> getColumn(const vector<vector<float>> &v, int attribute)
 {
+    int nrows = v.size();
     vector<float> col;
+    col.reserve(nrows);
     for (auto &row : v)
     {
         col.push_back(row[attribute]);
@@ -65,6 +71,8 @@ vector<float> getColumn(const vector<vector<float>> &v, int attribute)
 
 vector<vector<float>> getRows(const vector<vector<float>> &v, vector<int> rows)
 {
+    int nrows = rows.size();
+    int ncols = v[0].size();
     vector<vector<float>> out;
     for (int i : rows)
     {
@@ -73,39 +81,35 @@ vector<vector<float>> getRows(const vector<vector<float>> &v, vector<int> rows)
     return (out);
 }
 
-
-
 int performSplit(const vector<vector<float>> &dataset, vector<int> &attributesIndices,
                  const vector<int> &attributes, const vector<int> &coltypes, vector<int> &left, vector<int> &right, const vector<int> &nodeIndices)
 {
-  
+
   std::random_device rd;
   std::mt19937_64 mt(rd());
   std::uniform_int_distribution<int> dist (0,attributesIndices.size()-1);
-  
+
   //Sample a random index column
   int randIndex = dist(mt);
-  
+
   //Get the corresponding index attribute
   int attributeIndex = attributesIndices[randIndex];
-  
+
   *attributesIndices.erase(attributesIndices.begin() + randIndex);
   int attribute = attributes[attributeIndex];
   //Get the corresponding column type
   int type = coltypes.at(attribute);
   vector<vector<float>> localDataset = getRows(dataset, nodeIndices);
-  vector<float> data;
+  vector<float> data = getColumn(localDataset, attribute);
 
-  data = getColumn(localDataset, attribute);
-  
   std::unordered_set<float> set;
-  
+
   //Insert all the column values in a set
   for (const float &i : data)
   {
    set.insert(i);
   }
-  
+
   //If there is only one value:
   if (set.size() <= 1)
   {
@@ -113,8 +117,8 @@ int performSplit(const vector<vector<float>> &dataset, vector<int> &attributesIn
   }
   //Split the data according to its type
   float value = random_split(data, type);
-  
-  
+
+
   //Fill the indices
 
   // if (type == 0) { // Continuous attribute
@@ -140,7 +144,7 @@ int performSplit(const vector<vector<float>> &dataset, vector<int> &attributesIn
   //       {
   //         right.push_back(i);
   //       }
-  //   }  
+  //   }
   // }
 
   return 0;
@@ -155,20 +159,26 @@ struct Node
 MatrixXd getSim(const vector<vector<float>> &data,
                                            const int &nmin, const vector<int> &coltypes, int nTrees)
 {
+
   int nrows = data.size();
   vector<float> firstVector=data[0];
   int ncols=firstVector.size();
   MatrixXd matrix = MatrixXd::Zero(nrows, nrows);
-  vector<int> nodeIndices;
+  vector<int> nodeIndices(nrows);
+  std::iota(nodeIndices.begin(), nodeIndices.end(), 0);
 
-  for (int i=0; i < nrows; i++) {
-    nodeIndices.push_back(i);
-  }
+
+
   #pragma omp parallel for
+
   for (int loop = 0; loop < nTrees; loop++)
   {
     list<Node> nodes;
     vector<int> attributes, attributes_indices, instanceList;
+    attributes.reserve(ncols);
+    attributes_indices.reserve(ncols);
+    instanceList.reserve(nrows);
+
     for (int i = 0; i < ncols; i++)
     {
       attributes_indices.push_back(i);
@@ -262,7 +272,7 @@ MatrixXd getSim(const vector<vector<float>> &data,
           }
         }
       }
-      else 
+      else
       {
         for (int i : left_indices) {
           left_instances.push_back(nodeInstances[i]);
@@ -379,7 +389,7 @@ MatrixXd getDist(const vector<vector<float>> &data,
       Node currentNode = {right_indices, right_instances};
       nodes.push_back(currentNode);
     }
-    
+
     for (int instance1 : left_instances) {
         for (int instance2 : right_instances) {
               matrix(instance2,instance1) = matrix(instance1,instance2) += (left_instances.size() + right_instances.size());
@@ -524,7 +534,7 @@ int main(int argc, char** argv)
     auto result = options.parse(argc, argv);
     string path = result["path"].as<string>();
     char sep = result["sep"].as<char>();
-    
+
     string coltypesString = result["ctypes"].as<string>();
     float nminPercent = result["nmin"].as<float>();
     int nTrees = result["ntrees"].as<int>();
@@ -545,7 +555,7 @@ int main(int argc, char** argv)
         for (int i=0; i <= ncols; i++) {
           coltypes.push_back(1);
         }
-      } 
+      }
     }
     else {
       for (int i : coltypesString) {
@@ -653,7 +663,7 @@ int main(int argc, char** argv)
         }
         else {
             matrix = getDist(data, 0, coltypes, nTrees);
-        }      
+        }
       }
       cout << bestTrees << endl;
     }
