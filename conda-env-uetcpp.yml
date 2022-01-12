@@ -6,13 +6,16 @@ channels:
 dependencies:
   - python=3.8
   - jupyter
-  - nb_conda_kernels
-  - ipykernel
-  - jupytext
   - pip
   - numpy
   - scipy
   - pandas
-  - scikit-learn=0.24
+  - scikit-learn
   - matplotlib 
+  - seaborn
+  - networkx
+# Modules for running in a Jupyter notebook
+  - nb_conda_kernels
+  - ipykernel
+  - jupytext
 
