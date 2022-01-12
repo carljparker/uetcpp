@@ -1,7 +1,7 @@
 import numpy as np
 import seaborn as sns
 from sklearn.ensemble import RandomTreesEmbedding as rte
-from sklearn.cluster.hierarchical import AgglomerativeClustering as hac
+from sklearn.cluster import AgglomerativeClustering as hac
 import math
 import warnings
 import random
